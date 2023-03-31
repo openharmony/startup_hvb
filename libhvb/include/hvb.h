@@ -74,6 +74,7 @@ struct hvb_verified_data {
     uint64_t rollback_indexes[HVB_MAX_NUMBER_OF_ROLLBACK_INDEX_LOCATIONS];
 };
 
+struct hvb_verified_data *hvb_init_verified_data(void);
 enum hvb_errno hvb_chain_verify(struct hvb_ops *ops, const char *rvt_parttion_name,
                                 const char *const *hash_ptn_list,
                                 struct hvb_verified_data **out_data);

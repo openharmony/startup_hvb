@@ -24,7 +24,7 @@
 #include "hvb_cmdline.h"
 #include "hvb.h"
 
-static struct hvb_verified_data *hvb_init_verified_data(void)
+struct hvb_verified_data *hvb_init_verified_data(void)
 {
     struct hvb_verified_data *vd = NULL;
 
