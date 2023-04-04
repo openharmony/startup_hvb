@@ -19,6 +19,11 @@
 #include "hvb.h"
 #include "hvb_crypto.h"
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 /* Magic for the vbmeta image header. */
 #define HVB_MAGIC                    "HVB"
 #define HVB_MAGIC_LEN                4
@@ -150,5 +155,9 @@ enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_b
                               const char *const *hash_ptn_list, struct hvb_buf *out_pubk,
                               struct hvb_verified_data *verified_data);
 enum hvb_errno hvb_cert_parser(struct hvb_cert *cert, struct hvb_buf *cert_buf);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
