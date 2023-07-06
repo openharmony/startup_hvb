@@ -153,7 +153,7 @@ void lin_update_valid_len(struct long_int_num *p_a)
 static void lin_mul_word(unsigned long a, unsigned long b, unsigned long *res_hi, unsigned long *res_low)
 {
 #if defined(__aarch64__)
-    unsigned long hi;
+    unsigned long hi = 0;
     *res_low = a * b;
     __asm__ volatile ("umulh %0, %1, %2" : "+r"(hi) : "r"(a), "r"(b) :);
     *res_hi = hi;
