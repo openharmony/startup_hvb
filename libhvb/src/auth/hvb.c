@@ -28,7 +28,7 @@ struct hvb_verified_data *hvb_init_verified_data(void)
 {
     struct hvb_verified_data *vd = NULL;
 
-    vd = hvb_malloc(sizeof(*vd));
+    vd = hvb_calloc(sizeof(*vd));
     if (!vd) {
         hvb_print("malloc verified_data fail\n");
         return NULL;
