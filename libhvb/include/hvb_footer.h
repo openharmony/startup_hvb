@@ -26,7 +26,7 @@ extern "C" {
 
 /* Magic for the footer. */
 #define HVB_FOOTER_MAGIC       "HVB"
-#define HVB_FOOTER_MAGIC_LEN   4
+#define HVB_FOOTER_MAGIC_LEN   8
 /* Size of the footer. */
 #define HVB_FOOTER_SIZE        104
 
