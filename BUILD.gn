@@ -15,7 +15,5 @@
 import("//build/ohos.gni")
 
 group("hvb_group") {
-    deps = [
-      "//base/startup/hvb/libhvb:libhvb_static",
-    ]
+  deps = [ "libhvb:libhvb_static" ]
 }

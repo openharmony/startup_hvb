@@ -13,34 +13,34 @@
 # limitations under the License.
 
 import("//build/ohos.gni")
+
 #group("libhvb") {
 #   deps = [ ":libhvb_static" ]
 #}
 # For init only
 config("libhvb_exported_configs") {
   visibility = [ ":*" ]
-  include_dirs =
-      [ "//base/startup/hvb/libhvb/include" ]
+  include_dirs = [ "include" ]
 }
 
 ohos_static_library("libhvb_static") {
   sources = [
     "src/auth/hvb.c",
     "src/cert/hvb_cert.c",
+    "src/cmdline/hvb_cmdline.c",
     "src/crypto/hvb_hash_sha256.c",
-    "src/crypto/hvb_rsa_verify.c",
     "src/crypto/hvb_rsa.c",
+    "src/crypto/hvb_rsa_verify.c",
     "src/deps/hvb_sysdeps.c",
     "src/footer/hvb_footer.c",
     "src/rvt/hvb_rvt.c",
     "src/utils/hvb_util.c",
-    "src/cmdline/hvb_cmdline.c",
   ]
   include_dirs = [
-    "//base/startup/hvb/libhvb/incldue",
+    "incldue",
     "//third_party/bounds_checking_function/include",
   ]
   public_configs = [ ":libhvb_exported_configs" ]
   part_name = "hvb"
+  subsystem_name = "startup"
 }
-
