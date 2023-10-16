@@ -71,6 +71,7 @@ struct hvb_verified_data {
     struct hvb_image_data *images;
     uint64_t num_loaded_images;
     struct hvb_cmdline_data cmdline;
+    uint64_t key_len;
     uint64_t rollback_indexes[HVB_MAX_NUMBER_OF_ROLLBACK_INDEX_LOCATIONS];
 };
 
