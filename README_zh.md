@@ -117,7 +117,7 @@ Bootloader校验通过后，通过bootargs传递校验信息给内核，具体�
 
 | bootargs名称            | **说明**                                                     |
 | ----------------------- | ------------------------------------------------------------ |
-| ohos.boot.hvb.enable    | hvb使能开关：<br>false：不需要使能hvb<br>true：需使能HVB；使能时，bootloader需传递以下hvb详细参数： |
+| ohos.boot.hvb.enable    | **方案一**<br>hvb使能开关：<br>false：不需要使能hvb<br>true：需使能HVB<br>**方案二**<br>关联锁及验证状态时hvb使能开关: <br> orange: unlock状态下，不需要使能<br> green: lock状态下hvb校验成功，需要使能<br> yellow/red: lock状态下hvb校验失败，不需要使能<br>使能时，bootloader需传递以下hvb详细参数： |
 | ohos.boot.hvb.version   | 当前只支持1.0版本                                            |
 | ohos.boot.hvb.hash_algo | 当前只支持sha256                                             |
 | ohos.boot.hvb.digest    | HVB保护的所有用户态镜像以及RVT的verity信息摘要               |

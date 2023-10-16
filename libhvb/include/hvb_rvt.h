@@ -27,7 +27,13 @@ extern "C" {
 #define RVT_MAGIC_LEN                4
 #define RVT_RELEASE_SIZE             64
 #define MAX_NUMBER_OF_RVT_IMAGES     32
+#ifdef VB_HASH_ALGO_SM
+#define PUBKEY_LEN                   64
+#elif defined VB_HASH_ALGO_RSA4096
+#define PUBKEY_LEN                   1040
+#else
 #define PUBKEY_LEN                   528
+#endif
 #define PARTITION_NAME_LEN           64
 
 /* Maximum size of a rvt image - 64 KiB. */
