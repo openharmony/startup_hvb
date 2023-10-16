@@ -134,7 +134,7 @@ static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *con
     uint64_t desc_size;
 
     desc_size = sizeof(desc) - (PUBKEY_LEN - vd->key_len);
-    ret = hvb_rvt_head_parser(rvt, &header);
+    ret = hvb_rvt_head_parser(rvt, &header, desc_size);
     if (ret != HVB_OK) {
         hvb_print("error, parse rvt header.\n");
         goto fail;
