@@ -23,7 +23,6 @@
 #include "hvb_util.h"
 #include "hvb_cmdline.h"
 #include "hvb.h"
-#include "hvb_rvt.h"
 
 struct hvb_verified_data *hvb_init_verified_data(void)
 {
