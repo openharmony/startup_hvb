@@ -46,7 +46,7 @@ enum hvb_errno hvb_calculate_certs_digest(struct hvb_verified_data *vd, uint8_t 
     return HVB_OK;
 }
 
-enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *header)
+enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *header, uint64_t desc_size)
 {
     uint64_t rvt_real_size;
 
@@ -61,7 +61,7 @@ enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_h
 
     hvb_memcpy(header, rvt->addr, sizeof(*header));
 
-    rvt_real_size = sizeof(*header) + header->verity_num * sizeof(struct rvt_pubk_desc);
+    rvt_real_size = sizeof(*header) + header->verity_num * desc_size;
     if (rvt_real_size > rvt->size || rvt_real_size < sizeof(*header)) {
         hvb_print("error, rvt_real_size is invalid.\n");
         return HVB_ERROR_INVALID_ARGUMENT;
@@ -92,18 +92,18 @@ enum hvb_errno hvb_rvt_get_pubk_desc(const struct hvb_buf *rvt, struct hvb_buf *
     return HVB_OK;
 }
 
-enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_pubk_desc *desc)
+enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_pubk_desc *desc, uint64_t desc_size)
 {
     hvb_return_hvb_err_if_null(pubk);
     hvb_return_hvb_err_if_null(pubk->addr);
     hvb_return_hvb_err_if_null(desc);
 
-    if (pubk->size < sizeof(*desc)) {
+    if (pubk->size < desc_size) {
         hvb_print("error, pubk->size is too small.\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
 
-    hvb_memcpy(desc, pubk->addr, sizeof(*desc));
+    hvb_memcpy(desc, pubk->addr, desc_size);
 
     return HVB_OK;
 }

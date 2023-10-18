@@ -415,6 +415,7 @@ enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_b
     }
 
     *out_pubk = sign_info->pubk;
+    vd->key_len = out_pubk->size;
 
     return ret;
 }

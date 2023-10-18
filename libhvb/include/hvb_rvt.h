@@ -27,7 +27,7 @@ extern "C" {
 #define RVT_MAGIC_LEN                4
 #define RVT_RELEASE_SIZE             64
 #define MAX_NUMBER_OF_RVT_IMAGES     32
-#define PUBKEY_LEN                   528
+#define PUBKEY_LEN                   1040
 #define PARTITION_NAME_LEN           64
 
 /* Maximum size of a rvt image - 64 KiB. */
@@ -58,9 +58,9 @@ struct rvt_image_header {
     uint8_t rvt_reserved[RVT_RELEASE_SIZE];
 } HVB_ATTR_PACKED;
 
-enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *dest);
+enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *dest, uint64_t desc_size);
 enum hvb_errno hvb_rvt_get_pubk_desc(const struct hvb_buf *rvt, struct hvb_buf *pubk_desc);
-enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_pubk_desc *desc);
+enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_pubk_desc *desc, uint64_t desc_size);
 enum hvb_errno hvb_rvt_get_pubk_buf(struct hvb_buf *key_buf, const struct hvb_buf *rvt, struct rvt_pubk_desc *desc);
 enum hvb_errno hvb_calculate_certs_digest(struct hvb_verified_data *vd, uint8_t *out_digest);
 

@@ -64,6 +64,8 @@ struct hvb_verified_data *hvb_init_verified_data(void)
     vd->cmdline.cur_pos = 0;
     vd->cmdline.max_size = CMD_LINE_SIZE;
 
+    vd->key_len = 0;
+
     return vd;
 }
 
@@ -128,8 +130,10 @@ static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *con
     struct hvb_buf expected_pubk;
     struct hvb_buf cert_pubk;
     struct rvt_image_header header;
+    uint64_t desc_size;
 
-    ret = hvb_rvt_head_parser(rvt, &header);
+    desc_size = sizeof(desc) - (PUBKEY_LEN - vd->key_len);
+    ret = hvb_rvt_head_parser(rvt, &header, desc_size);
     if (ret != HVB_OK) {
         hvb_print("error, parse rvt header.\n");
         goto fail;
@@ -143,7 +147,7 @@ static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *con
     }
 
     for (i = 0; i < nodes_num; i++) {
-        ret = hvb_rvt_pubk_desc_parser(&pubk_descs, &desc);
+        ret = hvb_rvt_pubk_desc_parser(&pubk_descs, &desc, desc_size);
         if (ret != HVB_OK) {
             hvb_print("errror, parser rvt k descs\n");
             goto fail;
@@ -167,7 +171,7 @@ static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *con
             goto fail;
         }
 
-        pubk_descs.addr += sizeof(struct rvt_pubk_desc);
+        pubk_descs.addr += desc_size;
     }
 
 fail:
