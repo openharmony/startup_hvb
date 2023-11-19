@@ -21,6 +21,11 @@ import("//build/ohos.gni")
 config("libhvb_exported_configs") {
   visibility = [ ":*" ]
   include_dirs = [ "include" ]
+  if (target_cpu == "arm64") {
+    defines = [ "__LP64__" ]
+  } else {
+    defines = [ "__LP32__" ]
+  }
 }
 
 ohos_static_library("libhvb_static") {
