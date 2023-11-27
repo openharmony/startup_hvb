@@ -670,7 +670,7 @@ class ImageHandle(object):
 class HvbTool(object):
     MAGIC = b'HVB\0'
     HVB_VERSION_MAJOR = 1
-    HVB_VERSION_MINOR = 0
+    HVB_VERSION_MINOR = 1
     FOOTER_SIZE = 104
     VERITY_RESERVED = b'\0' * 36
     RVT_MAGIC = b'rot\0'

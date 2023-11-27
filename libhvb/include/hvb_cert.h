@@ -36,7 +36,7 @@ extern "C"
 
 /* The version number of HVB - keep in sync with hvbtool. */
 #define HVB_VERSION_MAJOR            1
-#define HVB_VERSION_MINOR            0
+#define HVB_VERSION_MINOR            1
 
 #define PUBKEY_MODULUS_LEN           256
 #define PUBKEY_P_RR_LEN              256
