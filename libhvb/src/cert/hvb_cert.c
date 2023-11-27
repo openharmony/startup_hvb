@@ -190,6 +190,39 @@ static enum hvb_errno _hvb_cert_payload_parser(struct hvb_cert *cert, uint8_t **
     return HVB_OK;
 }
 
+static enum hvb_errno _hvb_cert_payload_parser_v2(struct hvb_cert *cert, uint8_t **p, uint8_t *end, uint8_t *header)
+{
+    struct hash_payload *payload = &cert->hash_payload;
+    uint8_t *cur_header;
+ 
+    if (header + cert->salt_offset > end || header + cert->salt_offset <= header) {
+        hvb_print("error, illegal salt offset.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    cur_header = header + cert->salt_offset;
+ 
+    if (cur_header + cert->salt_size > end || cur_header + cert->salt_size <= cur_header) {
+        hvb_print("error, dc salt.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    payload->salt = cur_header;
+ 
+    if (header + cert->digest_offset > end || header + cert->digest_offset <= header) {
+        hvb_print("error, illegal digest offset.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    cur_header = header + cert->digest_offset;
+ 
+    if (cur_header + cert->digest_size > end || cur_header + cert->digest_size <= cur_header) {
+        hvb_print("error, dc digest.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    payload->digest = cur_header;
+    *p = cur_header + cert->digest_size;
+ 
+    return HVB_OK;
+}
+
 static enum hvb_errno _hvb_cert_signature_parser(struct hvb_cert *cert, uint8_t **p, uint8_t *end)
 {
     struct hvb_buf buf;
@@ -219,12 +252,55 @@ static enum hvb_errno _hvb_cert_signature_parser(struct hvb_cert *cert, uint8_t 
     return HVB_OK;
 }
 
+static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8_t **p, uint8_t *end, uint8_t *header)
+{
+    struct hvb_buf buf;
+    struct hvb_sign_info *sign_info = &cert->signature_info;
+    size_t cp_size = hvb_offsetof(struct hvb_sign_info, pubk);
+    uint8_t *cur_header;
+ 
+    if (!_decode_octets(&buf, cp_size, p, end)) {
+        hvb_print("error, dc sign info const.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    hvb_memcpy(&cert->signature_info, buf.addr, cp_size);
+ 
+    if (header + sign_info->pubkey_offset > end || header + sign_info->pubkey_offset <= header) {
+        hvb_print("error, illegal pubkey offset.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    cur_header = header + sign_info->pubkey_offset;
+ 
+    if (cur_header + sign_info->pubkey_len > end || cur_header + sign_info->pubkey_len <= cur_header) {
+        hvb_print("error, dc pubkey.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    sign_info->pubk.addr = cur_header;
+    sign_info->pubk.size = sign_info->pubkey_len;
+ 
+    if (header + sign_info->signature_offset > end || header + sign_info->signature_offset <= header) {
+        hvb_print("error, illegal signature offset.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    cur_header = header + sign_info->signature_offset;
+ 
+    if (cur_header + sign_info->signature_len > end || cur_header + sign_info->signature_len <= cur_header) {
+        hvb_print("error, dc pubkey.\n");
+        return HVB_ERROR_INVALID_CERT_FORMAT;
+    }
+    sign_info->sign.addr = cur_header;
+    sign_info->sign.size = sign_info->signature_len;
+ 
+    return HVB_OK;
+}
+
 enum hvb_errno hvb_cert_parser(struct hvb_cert *cert, struct hvb_buf *cert_buf)
 {
     enum hvb_errno ret = HVB_OK;
     struct hvb_buf buf;
     uint8_t *p = cert_buf->addr;
     uint8_t *end = p + cert_buf->size;
+    uint8_t *header = p;
     size_t header_size = hvb_offsetof(struct hvb_cert, hash_payload);
 
     /* parse header */
@@ -235,18 +311,37 @@ enum hvb_errno hvb_cert_parser(struct hvb_cert *cert, struct hvb_buf *cert_buf)
 
     hvb_memcpy(cert, buf.addr, buf.size);
 
-    /* parse hash payload */
-    ret = _hvb_cert_payload_parser(cert, &p, end);
-    if (ret != HVB_OK) {
-        hvb_print("error, pr hash payload.\n");
-        return ret;
-    }
-
-    /* parse signature info */
-    ret = _hvb_cert_signature_parser(cert, &p, end);
-    if (ret != HVB_OK) {
-        hvb_print("error, pr sign.\n");
-        return ret;
+    if (cert->version_minor == 0) {
+        /* parse hash payload */
+        ret = _hvb_cert_payload_parser(cert, &p, end);
+        if (ret != HVB_OK) {
+            hvb_print("error, pr hash payload.\n");
+            return ret;
+        }
+ 
+        /* parse signature info */
+        ret = _hvb_cert_signature_parser(cert, &p, end);
+        if (ret != HVB_OK) {
+            hvb_print("error, pr sign.\n");
+            return ret;
+        }
+    } else if (cert->version_minor == 1) {
+        /* parse hash payload v2 */
+        ret = _hvb_cert_payload_parser_v2(cert, &p, end, header);
+        if (ret != HVB_OK) {
+            hvb_print("error, pr hash payload.\n");
+            return ret;
+        }
+ 
+        /* parse signature info v2 */
+        ret = _hvb_cert_signature_parser_v2(cert, &p, end, header);
+        if (ret != HVB_OK) {
+            hvb_print("error, pr sign.\n");
+            return ret;
+        }
+    } else {
+        hvb_print("error minor version\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
     }
 
     return HVB_OK;
