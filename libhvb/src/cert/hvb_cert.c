@@ -325,23 +325,21 @@ enum hvb_errno hvb_cert_parser(struct hvb_cert *cert, struct hvb_buf *cert_buf)
             hvb_print("error, pr sign.\n");
             return ret;
         }
-    }
-    else if (cert->version_minor == 1) {
-        /* parse hash payload v2*/
+    } else if (cert->version_minor == 1) {
+        /* parse hash payload v2 */
         ret = _hvb_cert_payload_parser_v2(cert, &p, end, header);
         if (ret != HVB_OK) {
             hvb_print("error, pr hash payload.\n");
             return ret;
         }
  
-        /* parse signature info v2*/
+        /* parse signature info v2 */
         ret = _hvb_cert_signature_parser_v2(cert, &p, end, header);
         if (ret != HVB_OK) {
             hvb_print("error, pr sign.\n");
             return ret;
         }
-    }
-    else {
+    } else {
         hvb_print("error minor version\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
