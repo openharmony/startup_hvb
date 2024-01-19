@@ -434,8 +434,7 @@ class ImageHandle(object):
         if not self.is_sparse:
             self.img_handler.seek(0, os.SEEK_END)
             # This is more efficient that writing NUL bytes since it'll add
-            # a hole on file systems that support sparse files (native
-            # sparse, not Android sparse).
+            # a hole on file systems that support sparse files (native sparse).
             self.img_handler.truncate(self.img_handler.tell() + num_bytes)
             self.header_analyze()
             return
