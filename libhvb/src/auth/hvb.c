@@ -167,7 +167,7 @@ static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *con
 
         if (hvb_buf_equal(&expected_pubk, &cert_pubk) != true) {
             ret = HVB_ERROR_PUBLIC_KEY_REJECTED;
-            hvb_print("error, compare public key\n");
+            hvb_printv("error, compare public key: ", desc.name, "\n", NULL);
             goto fail;
         }
 

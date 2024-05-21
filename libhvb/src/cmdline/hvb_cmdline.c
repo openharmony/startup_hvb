@@ -28,7 +28,7 @@ static int cmdline_append_option(struct hvb_verified_data *vd, const char *key, 
     struct hvb_cmdline_data *cmdline = NULL;
 
     if (vd == NULL || vd->cmdline.buf == NULL)
-        return -1;
+        return 0;
 
     cmdline = &vd->cmdline;
 
@@ -37,7 +37,7 @@ static int cmdline_append_option(struct hvb_verified_data *vd, const char *key, 
     /* 2 for blank space and = */
     option_len = key_len + value_len + 2;
     if (option_len > cmdline->max_size - cmdline->cur_pos - 1)
-        return -1;
+        return 0;
 
     /* append blank space */
     cmdline->buf[cmdline->cur_pos] = ' ';
