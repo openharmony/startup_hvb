@@ -80,7 +80,9 @@ void *hvb_malloc_(size_t size)
 
 void hvb_free(void *ptr)
 {
-    free(ptr);
+    if (ptr != NULL) {
+        free(ptr);
+    }
 }
 
 uint32_t hvb_div_by_10(uint64_t *dividend)
