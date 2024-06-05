@@ -37,16 +37,13 @@ struct hvb_verified_data *hvb_init_verified_data(void)
     vd->certs = hvb_calloc(sizeof(struct hvb_cert_data) * HVB_MAX_NUMBER_OF_LOADED_CERTS);
     if (!vd->certs) {
         hvb_print("malloc certs fail\n");
-        hvb_free(vd);
-        return NULL;
+        goto fail;
     }
 
     vd->images = hvb_calloc(sizeof(struct hvb_image_data) * HVB_MAX_NUMBER_OF_LOADED_IMAGES);
     if (!vd->images) {
         hvb_print("malloc images fail\n");
-        hvb_free(vd->certs);
-        hvb_free(vd);
-        return NULL;
+        goto fail;
     }
 
     vd->num_loaded_certs = 0;
@@ -55,10 +52,7 @@ struct hvb_verified_data *hvb_init_verified_data(void)
     vd->cmdline.buf = hvb_calloc(CMD_LINE_SIZE);
     if (!vd->cmdline.buf) {
         hvb_print("malloc cmdline fail\n");
-        hvb_free(vd->images);
-        hvb_free(vd->certs);
-        hvb_free(vd);
-        return NULL;
+        goto fail;
     }
 
     vd->cmdline.cur_pos = 0;
@@ -66,6 +60,12 @@ struct hvb_verified_data *hvb_init_verified_data(void)
 
     vd->key_len = 0;
 
+    return vd;
+
+fail:
+    hvb_chain_verify_data_free(vd);
+    hvb_free(vd);
+    vd = NULL;
     return vd;
 }
 
@@ -223,18 +223,14 @@ enum hvb_errno hvb_chain_verify(struct hvb_ops *ops,
     struct hvb_verified_data *vd = NULL;
     char const **ptn_list = NULL;
 
-    if (out_vd != NULL) {
-        *out_vd = NULL;
-    }
-
     hvb_return_hvb_err_if_null(ops);
     hvb_return_hvb_err_if_null(rvt_ptn);
+    hvb_return_hvb_err_if_null(out_vd);
 
     ptn_list = hash_ptn_list_add_rvt(hash_ptn_list, rvt_ptn);
     if (ptn_list == NULL) {
         hvb_print("error, add rvt\n");
-        ret = HVB_ERROR_OOM;
-        goto fail;
+        return HVB_ERROR_OOM;
     }
 
     vd = hvb_init_verified_data();
@@ -273,16 +269,12 @@ enum hvb_errno hvb_chain_verify(struct hvb_ops *ops,
         goto fail;
     }
 
-    /* if out_vd is NULL, no need out slot data, we just hvb_free */
-    if (out_vd == NULL) {
-        hvb_chain_verify_data_free(vd);
-    } else {
-        *out_vd = vd;
-    }
+    *out_vd = vd;
 
 fail:
     if (vd != NULL && ret != HVB_OK) {
         hvb_chain_verify_data_free(vd);
+        hvb_free(vd);
     }
 
     hvb_free(ptn_list);
