@@ -131,6 +131,20 @@ void lin_free(struct long_int_num *p_long_int)
     return;
 }
 
+uint32_t bn_get_valid_len(const uint8_t *pd, uint32_t size)
+{
+    uint32_t i = 0;
+    uint32_t valid_len = size;
+
+    if(!pd)
+        return 0;
+
+    while(valid_len > 0 && pd[i++] == 0)
+        valid_len--;
+
+    return valid_len;
+}
+
 void lin_update_valid_len(struct long_int_num *p_a)
 {
     unsigned long *p_data = NULL;
@@ -242,6 +256,10 @@ static void montgomery_mul_add(struct long_int_num *p_a, unsigned long b, struct
     unsigned long *p_rd = p_res->p_uint;
     uint32_t i;
 
+    while (p_a->valid_word_len > p_n->valid_word_len){
+        lin_sub(p_a, p_n);
+    }
+
     lin_mul_word(p_a->p_uint[0], b, &x_h, &x_l);
 
     dword_add_word(x, p_rd[0], x);
@@ -341,7 +359,7 @@ fail_final:
     return p_res;
 }
 
-int lin_get_bitlen(struct long_int_num *p_a)
+uint32_t lin_get_bitlen(struct long_int_num *p_a)
 {
     int i;
     int bit_len;
