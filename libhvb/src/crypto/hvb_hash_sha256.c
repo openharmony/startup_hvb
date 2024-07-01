@@ -213,6 +213,9 @@ static void hash_sha256_pad_update(uint32_t *iv, const void *left_msg, uint64_t 
 
 static int hash_sha256_output_iv(uint32_t *iv, uint8_t *out, uint32_t out_len)
 {
+    if (out == NULL)
+        return HASH_ERR_PARAM_NULL;
+
     if (out_len < IV_BYTE_SIZE_SHA256) {
         return HASH_ERR_OUTBUF_NO_ENOUGH;
     }
@@ -231,6 +234,14 @@ int hash_sha256_single(const void *msg, uint32_t msg_len, uint8_t *out, uint32_t
     uint64_t data_size;
     uint64_t total_bit_len;
     uint32_t iv[IV_WORD_SIZE_SHA256];
+
+    if (msg == NULL || out == NULL) {
+        return HASH_ERR_PARAM_NULL;
+    }
+
+    if (msg_len == 0) {
+        return HASH_ERR_BUF_LEN;
+    }
 
     total_bit_len = (uint64_t)msg_len * 8;  // 8bit per byte
     if (total_bit_len < msg_len) {
@@ -287,7 +298,11 @@ int hash_calc_update(struct hash_ctx_t *hash_ctx, const void *msg, uint32_t msg_
     uint32_t blk_len;
     uint32_t calc_len;
 
-    if (hash_ctx == NULL) {
+    if(msg_len == 0) {
+        return HASH_OK;
+    }
+
+    if (hash_ctx == NULL || msg == NULL) {
         return HASH_ERR_PARAM_NULL;
     }
 
@@ -306,7 +321,7 @@ int hash_calc_update(struct hash_ctx_t *hash_ctx, const void *msg, uint32_t msg_
 
     if (hash_ctx->buf_len != 0 && msg_len >= left_len) {
         hvb_memcpy(hash_ctx->blk_buf + hash_ctx->buf_len, msg, left_len);
-        sha256_data_blk_update(hash_ctx->iv, hash_ctx->blk_buf, blk_len);
+        (void)sha256_data_blk_update(hash_ctx->iv, hash_ctx->blk_buf, blk_len);
 
         hash_ctx->buf_len = 0;
 

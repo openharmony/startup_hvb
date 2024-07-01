@@ -173,8 +173,10 @@ static int rsa_gen_mask_mgf_v1(uint8_t *seed, uint32_t seed_len,
     hvb_memcpy(mask, pt, mask_len);
 
 rsa_error:
-    hvb_free(pt);
-    hvb_free(pc);
+    if (pt != NULL)
+        hvb_free(pt);
+    if (pc != NULL)
+        hvb_free(pc);
     return ret;
 }
 
@@ -273,8 +275,10 @@ static int emsa_pss_verify(uint32_t saltlen, const uint8_t *pdigest,
     ret = emsa_pss_hash_cmp(m_tmp, m_tmp_len, hash, digestlen);
 
 rsa_error:
-    hvb_free(db);
-    hvb_free(m_tmp);
+    if (db != NULL)
+        hvb_free(db);
+    if (m_tmp ！= NULL)
+        hvb_free(m_tmp);
     return ret;
 }
 
@@ -289,6 +293,7 @@ static int hvb_rsa_verify_pss_param_check(const struct hvb_rsa_pubkey *pkey, con
                                           uint32_t digestlen, uint8_t *psign, uint32_t signlen)
 {
     uint32_t klen;
+    uint32_t n_validlen;
 
     if (!pkey || !pdigest || !psign) {
         return PARAM_EMPTY_ERROR;
@@ -297,10 +302,11 @@ static int hvb_rsa_verify_pss_param_check(const struct hvb_rsa_pubkey *pkey, con
         return PUBKEY_EMPTY_ERROR;
     }
     klen = bit2byte(pkey->width);
+    n_validlen = bn_get_valid_len(pkey->pn, pkey->nlen);
     if (digestlen != SHA256_DIGEST_LEN) {
         return DIGEST_LEN_ERROR;
     }
-    if (pkey->nlen != klen || pkey->rlen > pkey->nlen) {
+    if (n_validlen != klen || pkey->rlen > pkey->nlen) {
         return PUBKEY_LEN_ERROR;
     }
     if (signlen > klen) {
@@ -385,14 +391,16 @@ int hvb_rsa_verify_pss(const struct hvb_rsa_pubkey
         ret = MOD_EXP_CALC_FAIL;
         goto rsa_error;
     }
-    em->valid_word_len = byte2dword(pkey->nlen);
+
     lin_update_valid_len(em);
-    em_data = hvb_malloc(dword2byte(em->valid_word_len));
+    em_data = hvb_malloc(klen);
     if (!em_data) {
         ret = MOD_EXP_CALC_FAIL;
         goto rsa_error;
     }
-    invert_copy(em_data, (uint8_t *)em->p_uint, dword2byte(em->valid_word_len));
+
+    hvb_memset(em_data, 0, klen);
+    invert_copy(em_data, (uint8_t *)em->p_uint, klen);
     /* Step 2: emsa pss verify */
     ret = rsa_pss_get_emlen(klen, p_n, &emlen, &embits);
     if (ret != VERIFY_OK) {
