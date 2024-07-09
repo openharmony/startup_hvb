@@ -106,7 +106,9 @@ void *hvb_calloc(uint64_t size)
     if (!ret)
         return NULL;
 
-    hvb_memset(ret, 0, size);
+    if (hvb_memset_s(ret, size, 0, size) != 0) {
+        return NULL;
+    }
 
     return ret;
 }

@@ -25,8 +25,10 @@ static enum hvb_errno _footer_parser(struct hvb_footer *footer, struct hvb_buf *
         hvb_print("footer src size error.\n");
         return HVB_ERROR_INVALID_FOOTER_FORMAT;
     }
-
-    hvb_memcpy((uint8_t *)footer, footer_buf->addr, sizeof(*footer));
+    if (hvb_memcpy_s(footer, sizeof(*footer), footer_buf->addr, sizeof(*footer)) != 0) {
+        hvb_print("error, copy footer.\n");
+        return HVB_ERROR_OOM;
+    }
 
     /* Check that magic is correct. */
     if (hvb_memcmp(footer->magic, HVB_FOOTER_MAGIC, sizeof(footer->magic)) != 0) {
@@ -95,6 +97,11 @@ static enum hvb_errno _load_cert(struct hvb_ops *ops, struct hvb_buf *cert, cons
 enum hvb_errno footer_init_desc(struct hvb_ops *ops, const char *ptn, const char *const *hash_ptn_list,
                                 struct hvb_buf *out_pubk, struct hvb_verified_data *vd)
 {
+    hvb_return_hvb_err_if_null(ops);
+    hvb_return_hvb_err_if_null(ptn);
+    hvb_return_hvb_err_if_null(out_pubk);
+    hvb_return_hvb_err_if_null(vd);
+
     enum hvb_errno ret = HVB_OK;
     struct hvb_buf cert_buf = {NULL, 0};
     struct hvb_footer footer = {0};

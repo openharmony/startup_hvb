@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include "securec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,13 +30,16 @@ int hvb_memcmp(const void *src1, const void *src2, size_t n);
 int hvb_strcmp(const char *s1, const char *s2);
 int hvb_strncmp(const char *s1, const char *s2, size_t n);
 void *hvb_memcpy(void *dest, const void *src, size_t n);
+int hvb_memcpy_s(void *dest, size_t destMax, const void *src, size_t count);
 void *hvb_memset(void *dest, const int c, size_t n);
+int hvb_memset_s(void *dest, size_t destMax, int c, size_t count);
 void hvb_print(const char *message);
 void hvb_printv(const char *message, ...);
 void *hvb_malloc_(size_t size);
 void hvb_free(void *ptr);
 void hvb_abort(void);
 size_t hvb_strlen(const char *str);
+size_t hvb_strnlen(const char *str, size_t len);
 uint32_t hvb_div_by_10(uint64_t *dividend);
 
 #ifdef __cplusplus

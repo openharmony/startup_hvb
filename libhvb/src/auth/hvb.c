@@ -103,19 +103,25 @@ fail:
 
 static struct hvb_buf *hvb_get_partition_image(struct hvb_verified_data *vd, const char *ptn)
 {
-    uint32_t name_len = hvb_strlen(ptn);
     struct hvb_image_data *p = vd->images;
     struct hvb_image_data *end = p + vd->num_loaded_images;
+    size_t name_len = hvb_strnlen(ptn, HVB_MAX_PARTITION_NAME_LEN);
+    if (name_len >= HVB_MAX_PARTITION_NAME_LEN) {
+        hvb_print("invalid ptn name len\n");
+        return NULL;
+    }
 
     for (; p < end; p++) {
-        if (hvb_memcmp(ptn, p->partition_name, name_len) == 0)
+        if (hvb_strnlen(p->partition_name, HVB_MAX_PARTITION_NAME_LEN) == name_len &&
+            hvb_strncmp(ptn, p->partition_name, HVB_MAX_PARTITION_NAME_LEN) == 0) {
             return &p->data;
+        }
     }
 
     return NULL;
 }
 
-bool hvb_buf_equal(const struct hvb_buf *buf1, const struct hvb_buf *buf2)
+static bool hvb_buf_equal(const struct hvb_buf *buf1, const struct hvb_buf *buf2)
 {
     return buf1->size == buf2->size && hvb_memcmp(buf1->addr, buf2->addr, buf1->size) == 0;
 }

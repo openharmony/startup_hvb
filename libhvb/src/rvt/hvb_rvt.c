@@ -58,8 +58,10 @@ enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_h
         hvb_print("error, rvt->size is too small.\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
-
-    hvb_memcpy(header, rvt->addr, sizeof(*header));
+    if (hvb_memcpy_s(header, sizeof(*header), rvt->addr, sizeof(*header)) != 0) {
+        hvb_print("error, copy rvt header.\n");
+        return HVB_ERROR_OOM;
+    }
 
     rvt_real_size = sizeof(*header) + header->verity_num * desc_size;
     if (rvt_real_size > rvt->size || rvt_real_size < sizeof(*header)) {
@@ -102,8 +104,10 @@ enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_p
         hvb_print("error, pubk->size is too small.\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
-
-    hvb_memcpy(desc, pubk->addr, desc_size);
+    if (hvb_memcpy_s(desc, sizeof(*desc), pubk->addr, desc_size) != 0) {
+        hvb_print("error, copy desc.\n");
+        return HVB_ERROR_OOM;
+    }
 
     return HVB_OK;
 }

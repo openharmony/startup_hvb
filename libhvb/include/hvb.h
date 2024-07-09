@@ -26,6 +26,7 @@ extern "C"
 #define HVB_MAX_NUMBER_OF_ROLLBACK_INDEX_LOCATIONS 32
 #define HVB_MAX_NUMBER_OF_LOADED_CERTS             32
 #define HVB_MAX_NUMBER_OF_LOADED_IMAGES            32
+#define HVB_MAX_PARTITION_NAME_LEN                 36
 
 /* Maximum size of a rvt image - 64 KiB. */
 #define RVT_MAX_SIZE (64 * 1024)

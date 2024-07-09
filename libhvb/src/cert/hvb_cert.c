@@ -25,15 +25,20 @@
 static bool hvb_need_verify_hash(const char *const *hash_ptn_list, const char *ptn)
 {
     size_t n;
-    size_t ptn_len = hvb_strlen(ptn);
+    size_t ptn_len = hvb_strnlen(ptn, HVB_MAX_PARTITION_NAME_LEN);
+    if (ptn_len >= HVB_MAX_PARTITION_NAME_LEN) {
+        hvb_print("invalid ptn name len\n");
+        return false;
+    }
 
     if (hash_ptn_list == NULL)
         return false;
 
     for (n = 0; hash_ptn_list[n] != NULL; n++) {
-        if (hvb_strlen(hash_ptn_list[n]) == ptn_len &&
-            hvb_memcmp(hash_ptn_list[n], ptn, ptn_len) == 0)
+        if (hvb_strnlen(hash_ptn_list[n], HVB_MAX_PARTITION_NAME_LEN) == ptn_len &&
+            hvb_strncmp(hash_ptn_list[n], ptn, HVB_MAX_PARTITION_NAME_LEN) == 0) {
             return true;
+        }
     }
 
     return false;
@@ -233,21 +238,28 @@ static enum hvb_errno _hvb_cert_signature_parser(struct hvb_cert *cert, uint8_t 
         hvb_print("error, dc sign info const.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-    hvb_memcpy(&cert->signature_info, buf.addr, cp_size);
+    if (hvb_memcpy_s(&cert->signature_info, sizeof(cert->signature_info), buf.addr, cp_size) != 0) {
+        hvb_print("error, copy dc sign info const.\n");
+        return HVB_ERROR_OOM;
+    }
 
     if (!_decode_octets(&buf, sign_info->pubkey_len, p, end)) {
         hvb_print("error, dc pubk.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-
-    hvb_memcpy(&sign_info->pubk, &buf, sizeof(buf));
+    if (hvb_memcpy_s(&sign_info->pubk, sizeof(sign_info->pubk), &buf, sizeof(buf)) != 0) {
+        hvb_print("error, copy dc pubk.\n");
+        return HVB_ERROR_OOM;
+    }
 
     if (!_decode_octets(&buf, sign_info->signature_len, p, end)) {
         hvb_print("error, dc sign.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-
-    hvb_memcpy(&sign_info->sign, &buf, sizeof(buf));
+    if (hvb_memcpy_s(&sign_info->sign, sizeof(sign_info->sign), &buf, sizeof(buf)) != 0) {
+        hvb_print("error, copy dc sign.\n");
+        return HVB_ERROR_OOM;
+    }
 
     return HVB_OK;
 }
@@ -263,7 +275,10 @@ static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8
         hvb_print("error, dc sign info const.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-    hvb_memcpy(&cert->signature_info, buf.addr, cp_size);
+    if (hvb_memcpy_s(&cert->signature_info, sizeof(cert->signature_info), buf.addr, cp_size) != 0) {
+        hvb_print("error, copy dc sign info const.\n");
+        return HVB_ERROR_OOM;
+    }
  
     if (header + sign_info->pubkey_offset > end || header + sign_info->pubkey_offset <= header) {
         hvb_print("error, illegal pubkey offset.\n");
@@ -296,6 +311,9 @@ static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8
 
 enum hvb_errno hvb_cert_parser(struct hvb_cert *cert, struct hvb_buf *cert_buf)
 {
+    hvb_return_hvb_err_if_null(cert);
+    hvb_return_hvb_err_if_null(cert_buf);
+
     enum hvb_errno ret = HVB_OK;
     struct hvb_buf buf;
     uint8_t *p = cert_buf->addr;
@@ -308,8 +326,10 @@ enum hvb_errno hvb_cert_parser(struct hvb_cert *cert, struct hvb_buf *cert_buf)
         hvb_print("error, dc cert const.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-
-    hvb_memcpy(cert, buf.addr, buf.size);
+    if (hvb_memcpy_s(cert, sizeof(*cert), buf.addr, buf.size) != 0) {
+        hvb_print("error, copy dc cert const.\n");
+        return HVB_ERROR_OOM;
+    }
 
     if (cert->version_minor == 0) {
         /* parse hash payload */
@@ -478,6 +498,12 @@ enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_b
                               const char *const *hash_ptn_list, struct hvb_buf *out_pubk,
                               struct hvb_verified_data *vd)
 {
+    hvb_return_hvb_err_if_null(ops);
+    hvb_return_hvb_err_if_null(ptn);
+    hvb_return_hvb_err_if_null(cert_buf);
+    hvb_return_hvb_err_if_null(out_pubk);
+    hvb_return_hvb_err_if_null(vd);
+
     enum hvb_errno ret = HVB_OK;
     struct hvb_cert cert = {0};
     struct hvb_buf tbs = {0};
