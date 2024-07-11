@@ -31,9 +31,19 @@ void *hvb_memcpy(void *dest, const void *src, size_t n)
     return memcpy(dest, src, n);
 }
 
+int hvb_memcpy_s(void *dest, size_t destMax, const void *src, size_t count)
+{
+    return memcpy_s(dest, destMax, src, count);
+}
+
 void *hvb_memset(void *dest, const int c, size_t n)
 {
     return memset(dest, c, n);
+}
+
+int hvb_memset_s(void *dest, size_t destMax, int c, size_t count)
+{
+    return memset_s(dest, destMax, c, count);
 }
 
 int hvb_strcmp(const char *s1, const char *s2)
@@ -49,6 +59,11 @@ int hvb_strncmp(const char *s1, const char *s2, size_t n)
 size_t hvb_strlen(const char *str)
 {
     return (size_t)strlen(str);
+}
+
+size_t hvb_strnlen(const char *str, size_t len)
+{
+    return (size_t)strnlen(str, len);
 }
 
 void hvb_abort(void)
