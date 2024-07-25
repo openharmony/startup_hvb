@@ -28,6 +28,10 @@ extern "C"
 #define HVB_MAX_NUMBER_OF_LOADED_IMAGES            32
 #define HVB_MAX_PARTITION_NAME_LEN                 36
 
+/* partition range 4 Kib - 64 GiB. */
+#define HVB_MAX_PARTITION_SIZE                     0x1000000000
+#define HVB_MIN_PARTITION_SIZE                     0x0000001000
+
 /* Maximum size of a rvt image - 64 KiB. */
 #define RVT_MAX_SIZE (64 * 1024)
 
