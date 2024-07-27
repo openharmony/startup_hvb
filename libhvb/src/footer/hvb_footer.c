@@ -37,9 +37,25 @@ static enum hvb_errno _footer_parser(struct hvb_footer *footer, struct hvb_buf *
     }
 
     /* check these size is correct */
-    size = footer->image_size + footer->cert_size + footer_buf->size;
-    if (size < footer->image_size || size > footer->partition_size) {
+    if (footer->partition_size > HVB_MAX_PARTITION_SIZE ||
+        footer->partition_size < HVB_MIN_PARTITION_SIZE) {
+        hvb_print("Invalid partition_size in footer.\n");
+        return HVB_ERROR_INVALID_FOOTER_FORMAT;
+    }
+ 
+    size = footer->image_size + footer->cert_size + HVB_FOOTER_SIZE;
+    if (footer->image_size >= footer->partition_size ||
+        size < footer->image_size + HVB_FOOTER_SIZE ||
+        size > footer->partition_size) {
         hvb_print("Invalid image_size in footer.\n");
+        return HVB_ERROR_INVALID_FOOTER_FORMAT;
+    }
+ 
+    size = footer->cert_offset + footer->cert_size + HVB_FOOTER_SIZE;
+    if (footer->cert_offset < footer->image_size ||
+        size < footer->cert_offset + HVB_FOOTER_SIZE ||
+        size > footer->partition_size) {
+        hvb_print("Invalid cert info in footer.\n");
         return HVB_ERROR_INVALID_FOOTER_FORMAT;
     }
 
