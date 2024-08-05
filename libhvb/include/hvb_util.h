@@ -39,7 +39,7 @@ extern "C"
 #define hvb_return_hvb_err_if_null(__ptr)                   \
     do {                                                       \
         if ((__ptr) == NULL) {                             \
-            hvb_printv("error, %s is NULL\n", #__ptr); \
+            hvb_printv("error, %s is NULL\n", #__ptr, NULL); \
             return HVB_ERROR_INVALID_ARGUMENT;  \
         }                                                  \
     } while (0)
