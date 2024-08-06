@@ -43,16 +43,18 @@ enum {
 
 static void lin_clear(struct long_int_num *p_a)
 {
-    hvb_memset(p_a->data_mem, 0, p_a->mem_size);
+    (void)hvb_memset_s(p_a->data_mem, p_a->mem_size, 0, p_a->mem_size);
 }
 
 static int lin_copy(struct long_int_num *p_src, struct long_int_num *p_dst)
 {
-    if (p_src->valid_word_len > p_dst->mem_size) {
+    if (p_src->valid_word_len * WORD_BYTE_SIZE > p_dst->mem_size) {
         return ERROR_MEMORY_NO_ENOUGH;
     }
 
-    hvb_memcpy(p_dst->p_uint, p_src->p_uint, p_src->valid_word_len * WORD_BYTE_SIZE);
+    if (hvb_memcpy_s(p_dst->p_uint, p_dst->mem_size, p_src->p_uint, p_src->valid_word_len * WORD_BYTE_SIZE) != 0) {
+        return ERROR_MEMORY_NO_ENOUGH;
+    }
 
     p_dst->valid_word_len = p_src->valid_word_len;
 
@@ -65,6 +67,10 @@ static int lin_compare(struct long_int_num *p_a, struct long_int_num *p_b)
 
     if (p_a->valid_word_len != p_b->valid_word_len) {
         return p_a->valid_word_len - p_b->valid_word_len;
+    }
+
+    if (p_a->valid_word_len == 0) {
+        return 0;
     }
 
     for (i = p_a->valid_word_len - 1; i >= 0; --i) {
@@ -90,7 +96,9 @@ static int lin_calloc(struct long_int_num *p_long_int, uint32_t word_len)
         return ERROR_MEMORY_EMPTY;
     }
 
-    hvb_memset(p_data, 0, word_len * WORD_BYTE_SIZE);
+    if (hvb_memset_s(p_data, word_len * WORD_BYTE_SIZE, 0, word_len * WORD_BYTE_SIZE) != 0) {
+        return MEMORY_ERROR;
+    }
 
     p_long_int->data_mem = p_data;
     p_long_int->mem_size = word_len * WORD_BYTE_SIZE;
@@ -136,11 +144,13 @@ uint32_t bn_get_valid_len(const uint8_t *pd, uint32_t size)
     uint32_t i = 0;
     uint32_t valid_len = size;
 
-    if(!pd)
+    if (!pd) {
         return 0;
+    }
 
-    while(valid_len > 0 && pd[i++] == 0)
+    while (valid_len > 0 && pd[i++] == 0) {
         valid_len--;
+    }
 
     return valid_len;
 }
@@ -366,7 +376,7 @@ uint32_t lin_get_bitlen(struct long_int_num *p_a)
     unsigned long *p_data = NULL;
     unsigned long value;
 
-    if (!p_a) {
+    if (!p_a || p_a->valid_word_len == 0) {
         return 0;
     }
     p_data = p_a->p_uint;

@@ -21,6 +21,6 @@
 #define HASH_ERR_PARAM_NULL        (-3)
 #define HASH_ERR_BUF_LEN           (-4)
 #define HASH_ERR_OUTBUF_NO_ENOUGH  (-5)
-
+#define HASH_ERR_MEMORY            (-6)
 
 #endif
