@@ -188,7 +188,10 @@ static void hash_sha256_pad_update(uint32_t *iv, const void *left_msg, uint64_t 
     uint32_t fill_zero_len;
 
     if (left_len != 0) {
-        hvb_memcpy(sha256_pad, left_msg, (uint32_t)left_len);
+        if (hvb_memcpy_s(sha256_pad, sizeof(sha256_pad), left_msg, (uint32_t)left_len) != 0) {
+            hvb_print("error, memcpy_s fail.\n");
+            return;
+        }
     }
 
     pad_ptr = (uint8_t *)sha256_pad;
@@ -202,7 +205,10 @@ static void hash_sha256_pad_update(uint32_t *iv, const void *left_msg, uint64_t 
     }
 
     fill_zero_len = word2byte(pad_word_len) - (uint32_t)left_len - PAD_INFO_BYTE_LEN_SHA256;
-    hvb_memset(pad_ptr + left_len, 0, fill_zero_len);
+    if (hvb_memset_s(pad_ptr + left_len, sizeof(sha256_pad) - left_len, 0, fill_zero_len) != 0) {
+        hvb_print("error, memset_s fail.\n");
+        return;
+    }
 
     sha256_pad[pad_word_len - 1] = htobe32((uint32_t)total_bit_len);
     total_bit_len = total_bit_len >> 32;
@@ -224,7 +230,9 @@ static int hash_sha256_output_iv(uint32_t *iv, uint8_t *out, uint32_t out_len)
         iv[i] = htobe32(iv[i]);
     }
 
-    hvb_memcpy(out, iv, IV_BYTE_SIZE_SHA256);
+    if (hvb_memcpy_s(out, out_len, iv, IV_BYTE_SIZE_SHA256) != 0) {
+        return HASH_ERR_MEMORY;
+    }
 
     return HASH_OK;
 }
@@ -239,16 +247,14 @@ int hash_sha256_single(const void *msg, uint32_t msg_len, uint8_t *out, uint32_t
         return HASH_ERR_PARAM_NULL;
     }
 
-    if (msg_len == 0) {
-        return HASH_ERR_BUF_LEN;
-    }
-
     total_bit_len = (uint64_t)msg_len * 8;  // 8bit per byte
     if (total_bit_len < msg_len) {
         return HASH_ERR_TOTAL_LEN;
     }
 
-    hvb_memcpy(iv, sha256_iv_init, sizeof(sha256_iv_init));
+    if (hvb_memcpy_s(iv, sizeof(iv), sha256_iv_init, sizeof(sha256_iv_init)) != 0) {
+        return HASH_ERR_MEMORY;
+    }
 
     data_size = (msg_len / BLK_BYTE_SIZE_SHA256) * BLK_BYTE_SIZE_SHA256;
 
@@ -287,7 +293,9 @@ int hash_ctx_init(struct hash_ctx_t *hash_ctx, enum hash_alg_type alg_type)
     hash_ctx->buf_len   = 0;
     hash_ctx->total_len = 0;
 
-    (void)hvb_memcpy(hash_ctx->iv, sha256_iv_init, sizeof(sha256_iv_init));
+    if (hvb_memcpy_s(hash_ctx->iv, IV_BYTE_SIZE_SHA256, sha256_iv_init, sizeof(sha256_iv_init)) != 0) {
+        return HASH_ERR_MEMORY;
+    }
 
     return HASH_OK;
 }
@@ -316,11 +324,16 @@ int hash_calc_update(struct hash_ctx_t *hash_ctx, const void *msg, uint32_t msg_
     }
 
     hash_ctx->total_len = hash_ctx->total_len + msg_len;
+    if (hash_ctx->total_len < msg_len) {
+        return HASH_ERR_TOTAL_LEN;
+    }
 
     left_len = blk_len - hash_ctx->buf_len;
 
     if (hash_ctx->buf_len != 0 && msg_len >= left_len) {
-        hvb_memcpy(hash_ctx->blk_buf + hash_ctx->buf_len, msg, left_len);
+        if (hvb_memcpy_s(hash_ctx->blk_buf + hash_ctx->buf_len, left_len, msg, left_len) != 0) {
+            return HASH_ERR_MEMORY;
+        }
         (void)sha256_data_blk_update(hash_ctx->iv, hash_ctx->blk_buf, blk_len);
 
         hash_ctx->buf_len = 0;
@@ -338,7 +351,9 @@ int hash_calc_update(struct hash_ctx_t *hash_ctx, const void *msg, uint32_t msg_
     }
 
     if (msg_len != 0) {
-        hvb_memcpy(hash_ctx->blk_buf + hash_ctx->buf_len, msg, msg_len);
+        if (hvb_memcpy_s(hash_ctx->blk_buf + hash_ctx->buf_len, blk_len - hash_ctx->buf_len, msg, msg_len) != 0) {
+            return HASH_ERR_MEMORY;
+        }
         hash_ctx->buf_len = hash_ctx->buf_len + msg_len;
     }
 

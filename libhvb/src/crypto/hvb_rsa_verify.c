@@ -59,11 +59,18 @@ static int emsa_pss_calc_m(const uint8_t *pdigest, uint32_t digestlen,
         return PARAM_EMPTY_ERROR;
     }
 
-    hvb_memset(m_tmp, 0, PSS_MTMP_PADDING_LEN);
-    hvb_memcpy(&m_tmp[PSS_MTMP_PADDING_LEN], pdigest, digestlen);
+    if (hvb_memset_s(m_tmp, m_tmp_len, 0, PSS_MTMP_PADDING_LEN) !=  0) {
+        return MEMORY_ERROR;
+    }
+
+    if (hvb_memcpy_s(&m_tmp[PSS_MTMP_PADDING_LEN], m_tmp_len - PSS_MTMP_PADDING_LEN, pdigest, digestlen) != 0) {
+        return MEMORY_ERROR;
+    }
 
     if (saltlen != 0 && salt) {
-        hvb_memcpy(&m_tmp[PSS_MTMP_PADDING_LEN + digestlen], salt, saltlen);
+        if (hvb_memcpy_s(&m_tmp[PSS_MTMP_PADDING_LEN + digestlen], saltlen, salt, saltlen) != 0) {
+            return MEMORY_ERROR;
+        }
     }
 
     *m = m_tmp;
@@ -152,9 +159,13 @@ static int rsa_gen_mask_mgf_v1(uint8_t *seed, uint32_t seed_len,
      * string T:   T = T || Hash (pseed || counter)
      */
     p_tmp = pt;
-    hvb_memcpy(pc, seed, seed_len);
+    if (hvb_memcpy_s(pc, seed_len, seed, seed_len) != 0) {
+        return MEMORY_ERROR;
+    }
 
-    hvb_memset(pc + seed_len, 0, sizeof(uint32_t));
+    if (hvb_memset_s(pc + seed_len, sizeof(uint32_t), 0, sizeof(uint32_t)) != 0) {
+        return MEMORY_ERROR;
+    }
     /* step 3.1: count of Hash blocks needed for mask calculation */
     cnt_maxsize = (uint32_t)((mask_len + hash_len - 1) / hash_len);
 
@@ -164,13 +175,16 @@ static int rsa_gen_mask_mgf_v1(uint8_t *seed, uint32_t seed_len,
 
         /* step 3.3: calc T, T = T || Hash (pt_tmp) */
         if (hash_sha256_single(pc, seed_len + sizeof(uint32_t), p_tmp, hash_len) != HASH_OK) {
-        ret = CALC_MASK_ERROR;
-        goto rsa_error;
+            ret = CALC_MASK_ERROR;
+            goto rsa_error;
         }
         p_tmp += hash_len;
     }
     /* Step 4:  Output the leading L octets of T as the octet string mask. */
-    hvb_memcpy(mask, pt, mask_len);
+    if (hvb_memcpy_s(mask, mask_len, pt, mask_len) != 0) {
+        ret = MEMORY_ERROR;
+        goto rsa_error;
+    }
 
 rsa_error:
     if (pt != NULL)
@@ -399,7 +413,10 @@ int hvb_rsa_verify_pss(const struct hvb_rsa_pubkey
         goto rsa_error;
     }
 
-    hvb_memset(em_data, 0, klen);
+    if (hvb_memset_s(em_data, klen, 0, klen) != 0) {
+        ret = MEMORY_ERROR;
+        goto rsa_error;
+    }
     invert_copy(em_data, (uint8_t *)em->p_uint, klen);
     /* Step 2: emsa pss verify */
     ret = rsa_pss_get_emlen(klen, p_n, &emlen, &embits);
