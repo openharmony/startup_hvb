@@ -313,6 +313,12 @@ enum hvb_errno hvb_cert_parser(struct hvb_cert *cert, struct hvb_buf *cert_buf)
 {
     hvb_return_hvb_err_if_null(cert);
     hvb_return_hvb_err_if_null(cert_buf);
+    hvb_return_hvb_err_if_null(cert_buf->addr);
+ 
+    if (cert_buf->size > HVB_CERT_MAX_SIZE) {
+        hvb_print("invalid cert size.\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
 
     enum hvb_errno ret = HVB_OK;
     struct hvb_buf buf;
@@ -501,6 +507,7 @@ enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_b
     hvb_return_hvb_err_if_null(ops);
     hvb_return_hvb_err_if_null(ptn);
     hvb_return_hvb_err_if_null(cert_buf);
+    hvb_return_hvb_err_if_null(cert_buf->addr);
     hvb_return_hvb_err_if_null(out_pubk);
     hvb_return_hvb_err_if_null(vd);
 
