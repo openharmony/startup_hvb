@@ -33,6 +33,7 @@ extern "C"
 #define HVB_SIGNATURE_RESERVED_SIZE  64
 #define VERITY_NAME_SIZE             64
 #define HVB_SIGNATURE_MAX_SIZE       4096
+#define HVB_CERT_MAX_SIZE            4096
 
 /* The version number of HVB - keep in sync with hvbtool. */
 #define HVB_VERSION_MAJOR            1
