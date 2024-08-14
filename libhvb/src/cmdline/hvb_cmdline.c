@@ -101,9 +101,17 @@ static int cmdline_append_hex(struct hvb_verified_data *vd, const char* key,
 
 enum hvb_errno hvb_creat_cmdline(struct hvb_ops *ops, struct hvb_verified_data *vd)
 {
+    hvb_return_hvb_err_if_null(ops);
+    hvb_return_hvb_err_if_null(vd);
+
     enum hvb_errno ret = HVB_OK;
     enum hvb_io_errno io_ret = HVB_IO_OK;
     bool device_locked = false;
+    ret = check_hvb_ops(ops);
+    if (ret != HVB_OK) {
+        hvb_print("error, check ops\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
 
     /* set ohos.boot.hvb.version. */
     if (!hvb_append_version_cmdline(vd, HVB_CMDLINE_VERSION,

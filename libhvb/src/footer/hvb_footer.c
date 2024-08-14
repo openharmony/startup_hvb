@@ -123,6 +123,16 @@ enum hvb_errno footer_init_desc(struct hvb_ops *ops, const char *ptn, const char
     struct hvb_footer footer = {0};
     struct hvb_cert_data *cert_info = NULL;
 
+    ret = check_hvb_ops(ops);
+    if (ret != HVB_OK) {
+        hvb_print("error, check ops\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+    if (hvb_strnlen(ptn, HVB_MAX_PARTITION_NAME_LEN) >= HVB_MAX_PARTITION_NAME_LEN) {
+        hvb_print("error, check partition name\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
     ret = _load_and_parse_footer(ops, &footer, ptn);
     if (ret != HVB_OK)
         return ret;

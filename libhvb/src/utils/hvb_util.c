@@ -128,3 +128,17 @@ char *hvb_strdup(const char *str)
 
     return new_str;
 }
+
+enum hvb_errno check_hvb_ops(struct hvb_ops *ops)
+{
+    hvb_return_hvb_err_if_null(ops);
+    hvb_return_hvb_err_if_null(ops->user_data);
+    hvb_return_hvb_err_if_null(ops->read_partition);
+    hvb_return_hvb_err_if_null(ops->write_partition);
+    hvb_return_hvb_err_if_null(ops->valid_rvt_key);
+    hvb_return_hvb_err_if_null(ops->read_rollback);
+    hvb_return_hvb_err_if_null(ops->write_rollback);
+    hvb_return_hvb_err_if_null(ops->read_lock_state);
+    hvb_return_hvb_err_if_null(ops->get_partiton_size);
+    return HVB_OK;
+}

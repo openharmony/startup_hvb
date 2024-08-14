@@ -16,6 +16,8 @@
 #define __HVB_UTIL_H_
 
 #include <stddef.h>
+#include "hvb_ops.h"
+#include "hvb.h"
 #include "hvb_sysdeps.h"
 
 #ifdef __cplusplus
@@ -53,6 +55,8 @@ void *hvb_calloc(uint64_t size);
 
 uint64_t hvb_uint64_to_base10(uint64_t value, char digits[HVB_MAX_DIGITS_UINT64]);
 char *hvb_bin2hex(const uint8_t *data, size_t data_len);
+
+enum hvb_errno check_hvb_ops(struct hvb_ops *ops);
 
 #ifdef __cplusplus
 }
