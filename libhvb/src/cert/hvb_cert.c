@@ -512,6 +512,16 @@ enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_b
     hvb_return_hvb_err_if_null(vd);
 
     enum hvb_errno ret = HVB_OK;
+    ret = check_hvb_ops(ops);
+    if (ret != HVB_OK) {
+        hvb_print("error, check ops\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+    if (hvb_strnlen(ptn, HVB_MAX_PARTITION_NAME_LEN) >= HVB_MAX_PARTITION_NAME_LEN) {
+        hvb_print("error, check partition name\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
     struct hvb_cert cert = {0};
     struct hvb_buf tbs = {0};
     struct hvb_sign_info *sign_info = &cert.signature_info;

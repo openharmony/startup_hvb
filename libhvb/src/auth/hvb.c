@@ -207,7 +207,7 @@ static char const **hash_ptn_list_add_rvt(const char *const *hash_ptn_list, cons
 
     for (n = 0; n < num_parttions - REQUEST_LIST_LEN; n++) {
         ptn[n] = hash_ptn_list[n];
-        if (hvb_strcmp(ptn[n], rvt_ptn) == 0) {
+        if (hvb_strncmp(ptn[n], rvt_ptn, HVB_MAX_PARTITION_NAME_LEN) == 0) {
             need_add_rvt = false;
         }
     }
@@ -232,6 +232,16 @@ enum hvb_errno hvb_chain_verify(struct hvb_ops *ops,
     hvb_return_hvb_err_if_null(ops);
     hvb_return_hvb_err_if_null(rvt_ptn);
     hvb_return_hvb_err_if_null(out_vd);
+    ret = check_hvb_ops(ops);
+    if (ret != HVB_OK) {
+        hvb_print("error, check ops\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+ 
+    if (hvb_strnlen(rvt_ptn, HVB_MAX_PARTITION_NAME_LEN) >= HVB_MAX_PARTITION_NAME_LEN) {
+        hvb_print("error, check rvt partition name\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
 
     ptn_list = hash_ptn_list_add_rvt(hash_ptn_list, rvt_ptn);
     if (ptn_list == NULL) {
