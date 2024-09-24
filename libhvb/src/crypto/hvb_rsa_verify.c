@@ -52,6 +52,7 @@ static int emsa_pss_calc_m(const uint8_t *pdigest, uint32_t digestlen,
 {
     uint8_t *m_tmp = NULL;
     uint32_t m_tmp_len;
+    int ret = VERIFY_OK;
 
     m_tmp_len = digestlen + saltlen + PSS_MTMP_PADDING_LEN;
     m_tmp = (uint8_t *)hvb_malloc(m_tmp_len);
@@ -60,21 +61,27 @@ static int emsa_pss_calc_m(const uint8_t *pdigest, uint32_t digestlen,
     }
 
     if (hvb_memset_s(m_tmp, m_tmp_len, 0, PSS_MTMP_PADDING_LEN) !=  0) {
-        return MEMORY_ERROR;
+        ret = MEMORY_ERROR;
+        goto error;
     }
 
     if (hvb_memcpy_s(&m_tmp[PSS_MTMP_PADDING_LEN], m_tmp_len - PSS_MTMP_PADDING_LEN, pdigest, digestlen) != 0) {
-        return MEMORY_ERROR;
+        ret = MEMORY_ERROR;
+        goto error;
     }
 
     if (saltlen != 0 && salt) {
         if (hvb_memcpy_s(&m_tmp[PSS_MTMP_PADDING_LEN + digestlen], saltlen, salt, saltlen) != 0) {
-            return MEMORY_ERROR;
+            ret = MEMORY_ERROR;
+            goto error;
         }
     }
 
     *m = m_tmp;
-    return VERIFY_OK;
+    return ret;
+error:
+    hvb_free(m_tmp);
+    return ret;
 }
 
 /* rsa verify last step compare hash value */
@@ -160,11 +167,13 @@ static int rsa_gen_mask_mgf_v1(uint8_t *seed, uint32_t seed_len,
      */
     p_tmp = pt;
     if (hvb_memcpy_s(pc, seed_len, seed, seed_len) != 0) {
-        return MEMORY_ERROR;
+        ret = MEMORY_ERROR;
+        goto rsa_error;
     }
 
     if (hvb_memset_s(pc + seed_len, sizeof(uint32_t), 0, sizeof(uint32_t)) != 0) {
-        return MEMORY_ERROR;
+        ret = MEMORY_ERROR;
+        goto rsa_error;
     }
     /* step 3.1: count of Hash blocks needed for mask calculation */
     cnt_maxsize = (uint32_t)((mask_len + hash_len - 1) / hash_len);
