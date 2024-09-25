@@ -97,7 +97,8 @@ static int lin_calloc(struct long_int_num *p_long_int, uint32_t word_len)
     }
 
     if (hvb_memset_s(p_data, word_len * WORD_BYTE_SIZE, 0, word_len * WORD_BYTE_SIZE) != 0) {
-        return MEMORY_ERROR;
+        hvb_free(p_data);
+        return ERROR_MEMORY_NO_ENOUGH;
     }
 
     p_long_int->data_mem = p_data;
