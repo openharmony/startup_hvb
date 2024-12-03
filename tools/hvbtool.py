@@ -25,28 +25,36 @@ import subprocess
 import sys
 import bisect
 import shutil
+import random
 
 
-_params = {'partition':         None,     \
-          'partition_size':    None,      \
-          'image':             None,         \
-          'verity_type':       'hash',       \
-          'algorithm':         'SHA256_RSA3072',     \
-          'rollback_location': None,   \
-          'rollback_index':    None,   \
-          'salt':              None,           \
-          'pubkey':            None,           \
-          'privkey':           None,           \
-          'hash_algo':         'SHA256',  \
-          'block_size':        4096,  \
-          'fec_num_roots':     0,    \
-          'padding_size':      None,    \
-          'chain_partition':   [],  \
-          'output':            None}
+_params = {
+    'partition':                 None,             \
+    'partition_size':            0,                \
+    'image':                     None,             \
+    'verity_type':               'hash',           \
+    'algorithm':                 'SHA256_RSA3072', \
+    'userid':                    None,             \
+    'rollback_location':         None,             \
+    'rollback_index':            None,             \
+    'salt':                      None,             \
+    'pubkey':                    None,             \
+    'privkey':                   None,             \
+    'hash_algo':                 'SHA256',         \
+    'block_size':                4096,             \
+    'fec_num_roots':             0,                \
+    'padding_size':              None,             \
+    'chain_partition':           [],               \
+    'signing_helper_with_files': None,             \
+    'calc_max_image_size':      'false',           \
+    'output':                    None
+}
 
 
-VERITY_TYPE = {'make_hash_footer':      'hash',   \
-               'make_hashtree_footer':  'hashtree'}
+VERITY_TYPE = {
+    'make_hash_footer':      'hash',   \
+    'make_hashtree_footer':  'hashtree'
+}
 
 
 class Algorithm(object):
@@ -59,11 +67,217 @@ class Algorithm(object):
         self.pubkey_bytes = pubkey_bytes
 
 
+ALGORITHMS = {'SHA256_RSA3072': Algorithm(
+        sig_algo=0,
+        hash_algo='sha256',
+        bit_length=3072,
+        sig_bytes=384,
+        hash_bytes=32,
+        pubkey_bytes=8 + 2 * 3072 // 8
+    ), \
+    'SHA256_RSA4096': Algorithm(
+        sig_algo=1,
+        hash_algo='sha256',
+        bit_length=4096,
+        sig_bytes=512,
+        hash_bytes=32,
+        pubkey_bytes=8 + 2 * 4096 // 8
+    ), \
+    'SHA256_RSA2048': Algorithm(
+        sig_algo=2,
+        hash_algo='sha256',
+        bit_length=2048,
+        sig_bytes=256,
+        hash_bytes=32,
+        pubkey_bytes=8 + 2 * 2048 // 8
+    ), \
+    'SM2': Algorithm(
+        sig_algo=3,
+        hash_algo='SM3',
+        bit_length=256,    # bit
+        sig_bytes=64,
+        hash_bytes=32,
+        pubkey_bytes=64
+    ) \
+}
+
+HASH_ALGORITHM = {
+    'sha256' : 0,
+    'sha128' : 1,
+    'sha512' : 2,
+    'SM3'    : 3
+}
+
+
 def round_to_multiple(num, size):
     remainder = num % size
     if remainder == 0:
         return num
     return num + size - remainder
+
+
+def create_random_data(length=64):
+    data = ''
+    chars = '0123456789abcdef'
+    len_chars = len(chars) - 1
+    for i in range(length):
+        data += chars[random.randint(0, len_chars)]
+    return data
+
+
+def encode_long(num_bits, value):
+    ret = bytearray()
+    for bit_pos in range(num_bits, 0, -8):
+        octet = (value >> (bit_pos - 8)) & 0xff
+        ret.extend(struct.pack('!B', octet))
+    return ret
+
+
+def decode_long(blob):
+    ret = 0
+    for b in bytearray(blob):
+        ret *= 256
+        ret += b
+    return ret
+
+
+def calc_hashtree_size(size, block_size, digest_size):
+    level_offsets = []
+    level_sizes = []
+
+    treesize = 0
+    levels = 0
+
+    while size > block_size:
+        blocknum = size // block_size
+        level_size = round_to_multiple(blocknum * digest_size, block_size)
+        level_sizes.append(level_size)
+        treesize += level_size
+        levels += 1
+        size = level_size
+    for i in range(levels):
+        offset = 0
+        for j in range(i + 1, levels):
+            offset += level_sizes[j]
+        level_offsets.append(offset)
+
+    return level_offsets, treesize
+
+
+def get_sm3_digest(handle):
+    cmds = ['openssl', 'dgst', '-SM3', handle]
+    p = subprocess.Popen(cmds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (pout, perr) = p.communicate(timeout=10)
+    retcode = p.wait()
+    if retcode != 0:
+        raise HvbError("Failed to calculate the hash using SM3.")
+    return binascii.a2b_hex(pout.split(b'=')[-1].strip())
+
+
+def get_sha256_digest(hash_algo, salt, content):
+    hasher = hashlib.new(hash_algo, salt)
+    hasher.update(content)
+    return hasher.digest()
+
+
+def generate_sha_hash_tree(image, image_size, block_size, hash_algo, salt, hash_level_offsets, tree_size):
+    hash_ret = bytearray(tree_size)
+    hash_src_offset = 0
+    hash_src_size = image_size
+    level_num = 0
+
+    while hash_src_size > block_size:
+        level_output_list = []
+        remaining = hash_src_size
+        while remaining > 0:
+            hasher = hashlib.new(hash_algo, salt)
+            if level_num == 0:
+                begin = hash_src_offset + hash_src_size - remaining
+                end = min(remaining, block_size)
+                image.seek(begin)
+                data = image.read(end)
+            else:
+                offset = hash_level_offsets[level_num - 1] + hash_src_size - remaining
+                data = hash_ret[offset : offset + block_size]
+            hasher.update(data)
+
+            remaining -= len(data)
+            if len(data) < block_size:
+                hasher.update(b'\0' * (block_size - len(data)))
+            level_output_list.append(hasher.digest())
+
+        level_output = b''.join(level_output_list)
+        level_output_padding = round_to_multiple(len(level_output), block_size) - len(level_output)
+        level_output += b'\0' * level_output_padding
+
+        offset = hash_level_offsets[level_num]
+        hash_ret[offset : offset + len(level_output)] = level_output
+
+        hash_src_size = len(level_output)
+        level_num += 1
+
+    hasher = hashlib.new(hash_algo, salt)
+    hasher.update(level_output)
+
+    return hasher.digest(), bytes(hash_ret)
+
+
+def generate_sm3_hash_tree(image, image_size, block_size, hash_level_offsets, tree_size):
+    hash_ret = bytearray(tree_size)
+    hash_src_offset = 0
+    hash_src_size = image_size
+    level_num = 0
+    tmp = 'hash_{}.bin'.format(os.getpid())
+
+    while hash_src_size > block_size:
+        level_output_list = []
+        remaining = hash_src_size
+        while remaining > 0:
+            hasher = b''
+            if level_num == 0:
+                begin = hash_src_offset + hash_src_size - remaining
+                end = min(remaining, block_size)
+                image.seek(begin)
+                data = image.read(end)
+            else:
+                offset = hash_level_offsets[level_num - 1] + hash_src_size - remaining
+                data = hash_ret[offset : offset + block_size]
+            hasher += data
+
+            remaining -= len(data)
+            if len(data) < block_size:
+                hasher += b'\0' * (block_size - len(data))
+
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+            fd = open(tmp, 'wb')
+            fd.write(hasher)
+            fd.close()
+
+            dgst = get_sm3_digest(tmp)
+            level_output_list.append(dgst)
+
+        level_output = b''.join(level_output_list)
+        level_output_padding = round_to_multiple(len(level_output), block_size) - len(level_output)
+        level_output += b'\0' * level_output_padding
+
+        offset = hash_level_offsets[level_num]
+        hash_ret[offset : offset + len(level_output)] = level_output
+
+        hash_src_size = len(level_output)
+        level_num += 1
+
+    if os.path.exists(tmp):
+        os.remove(tmp)
+
+    fd = open(tmp, 'wb')
+    fd.write(level_output)
+    fd.close()
+
+    root_digest = get_sm3_digest(tmp)
+
+    return root_digest, bytes(hash_ret)
 
 
 class HvbFooter(object):
@@ -100,12 +314,14 @@ class HvbCert(object):
     CERTMAGIC = b'HVB\0'
     ALGORITHM_TYPES = {0 : 'SHA256_RSA3072',
                        1 : 'SHA256_RSA4096',
-                       2 : 'SHA256_RSA2048'
+                       2 : 'SHA256_RSA2048',
+                       3 : 'SM2'
                     }
 
     HASH_ALGORITHMS = {0 : 'SHA256',
                        1 : 'SHA128',
-                       2 : 'SHA512'
+                       2 : 'SHA512',
+                       3 : 'SM3'
                        }
 
     def __init__(self, cert=None):
@@ -115,7 +331,7 @@ class HvbCert(object):
         modes = stat.S_IWUSR | stat.S_IRUSR
         with os.fdopen(os.open('cert.bin', flags, modes), 'wb') as cert_fd:
             cert_fd.write(self.cert)
- 
+
         if self.cert:
             self.mgc, self.major, self.minor = struct.unpack('4s2I', self.cert[0:12])
             self.version = '{}.{}'.format(self.major, self.minor)
@@ -135,9 +351,17 @@ class HvbCert(object):
             self.digest = struct.unpack('{}s'.format(self.digest_size), \
                                         self.cert[240 + self.salt_size : 240 + self.salt_size + self.digest_size])
             hash_payload_size = self.salt_size + self.digest_size
+            signature_info_offset = 240 + hash_payload_size
             self.algo, self.flags, self.key_offset, self.key_len = struct.unpack('2I2Q', \
-                                    self.cert[240 + hash_payload_size + 8 : 240 + hash_payload_size + 8 + 24])
-            self.key = self.cert[240 + hash_payload_size + 112 : 240 + hash_payload_size + 112 + self.key_len]
+                                    self.cert[signature_info_offset + 8 : signature_info_offset + 8 + 24])
+            self.sig_content_offset, self.sig_content_bytes = struct.unpack('2Q', \
+                                    self.cert[signature_info_offset + 32 : signature_info_offset + 32 + 16])
+            self.userid_offset, self.userid_len = struct.unpack('QI', \
+                                    self.cert[signature_info_offset + 48 : signature_info_offset + 48 + 12])
+            print("userid_offset: {}, userid_len: {}".format(self.userid_offset, self.userid_len))
+            self.key = self.cert[signature_info_offset + 112 : signature_info_offset + 112 + self.key_len]
+            self.user_id = self.cert[signature_info_offset + 112 + self.key_len + self.sig_content_bytes : \
+                            signature_info_offset + 112 + self.key_len + self.sig_content_bytes + self.userid_len]
 
         else:
             raise HvbError('Given cert is None.')
@@ -167,15 +391,110 @@ class HvbCert(object):
             if self.algo not in self.ALGORITHM_TYPES:
                 raise HvbError("Unknown algorithm type: {}".format(self.algo))
             msg += "\tAlgorithm:                  {}\n".format(self.ALGORITHM_TYPES[self.algo])
-            msg += "\tPublic key (sha256):        {}\n\n".format(hashlib.sha256(self.key).hexdigest())
+            msg += "\tUser id:                    {}\n".format(self.user_id.decode())
+            if self.ALGORITHM_TYPES[self.algo] == 'SM2':
+                msg += "\tPublic key:                 {}\n\n".format(binascii.b2a_hex(self.key).decode())
+            else:
+                msg += "\tPublic key (sha256):        {}\n\n".format(hashlib.sha256(self.key).hexdigest())
         else:
             msg += 'There is no certificate.\n\n'
         print(msg)
 
+    def verify_signature(self, pubkey):
+        if self.algo not in self.ALGORITHM_TYPES:
+            raise HvbError("Unknown algorithm: {}".format(self.algo))
+        algorithm_type = self.ALGORITHM_TYPES.get(self.algo)
+        if algorithm_type not in ALGORITHMS:
+            raise HvbError("Unknown algorithm type: {}".format(algorithm_type))
+        algorithm = ALGORITHMS.get(algorithm_type)
+        to_be_sig_content = self.cert[0 : self.sig_content_offset]
+        sig_content = self.cert[self.sig_content_offset : self.sig_content_offset + self.sig_content_bytes]
+
+        to_be_sig_content_bin = os.sep.join([os.getcwd(), 'tmp.{0}.bin'.format(os.getpid())])
+        sig_content_bin = os.sep.join([os.getcwd(), 'sigcontent.{0}.bin'.format(os.getpid())])
+        flags = os.O_RDONLY | os.O_WRONLY | os.O_CREAT
+        modes = stat.S_IWUSR | stat.S_IRUSR
+        with os.fdopen(os.open(to_be_sig_content_bin, flags, modes), 'wb') as tmp_fd:
+            tmp_fd.write(to_be_sig_content)
+        with os.fdopen(os.open(sig_content_bin, flags, modes), 'wb') as tmp_fd:
+            tmp_fd.write(sig_content)
+        cmds = ['openssl', 'dgst', '-verify', pubkey, '-sigopt', 'rsa_padding_mode:pss',
+               '-sigopt', 'rsa_pss_saltlen:32', '-sha256', '-signature', sig_content_bin, to_be_sig_content_bin]
+        p = subprocess.Popen(cmds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (pout, perr) = p.communicate(timeout=10)
+        retcode = p.wait()
+        if os.path.exists(sig_content_bin):
+            os.remove(sig_content_bin)
+        if os.path.exists(to_be_sig_content_bin):
+            os.remove(to_be_sig_content_bin)
+        print(pout.decode().strip())
+        if retcode != 0:
+            raise HvbError('Error verifying data: {}'.format(perr))
+        if pout.decode().strip() != 'Verified OK':
+            sys.stderr.write('Signature not correct\n')
+            return False
+        return True
+
+    def verify_digest(self, image):
+        image_size = self.img_org_len
+        hash_algo = self.HASH_ALGORITHMS.get(self.hash_algo)
+        salt = self.salt[0]
+        if self.verity_type == 'hash':
+            image.seek(0)
+            image_content = image.read(image_size)
+            hasher = hashlib.new(hash_algo, salt)
+            hasher.update(image_content)
+            digest = hasher.digest()
+        elif self.verity_type == 'hashtree':
+            hashtree_hasher = hashlib.new(hash_algo, salt)
+            digest_size = len(hashtree_hasher.digest())
+            digest_padding = 2 ** ((digest_size - 1).bit_length()) - digest_size
+            remainder = image.block_size - image.img_size % image.block_size
+            if remainder != image.block_size:
+                image.append_raw(b'\0' * remainder)
+            level_offsets, tree_size = calc_hashtree_size(image_size, image.block_size, digest_size)
+            if hash_algo == 'SM3':
+                digest, hashtree = generate_sm3_hash_tree(image, image_size, image.block_size,
+                                                  hash_algo, level_offsets, tree_size)
+            else:
+                digest, hashtree = generate_sha_hash_tree(image, image_size, image.block_size,
+                                                  hash_algo, salt, level_offsets, tree_size)
+        else:
+            print("[hvbtool][ERROR]: Invalid verity_type: %d", self.vertype)
+            return False
+        if self.digest[0] and digest != self.digest[0]:
+            return False
+        return True
+
+
+class SMPublicKey(object):
+    def __init__(self, pubkey):
+        self.privkey = pubkey
+        self.pubkey = b''
+
+        cmds = ['openssl', 'ec', '-pubin', '-in', pubkey, '-text']
+        process = subprocess.Popen(cmds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            (out, err) = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            raise HvbError("Get public key timeout!")
+        if process.wait() != 0:
+            raise HvbError("Failed to get public key: {}".format(err))
+
+        self.key_data = out.split(b'\n')
+        self.pubkey_idx = self.key_data.index(b'pub:') + 1
+
+    def get_public_key(self):
+        for i in range(self.pubkey_idx, self.pubkey_idx + 5):    # The size of public key is 64 bytes, occupies 5 lines.
+            self.pubkey += b''.join(self.key_data[i].strip().split(b':'))
+
+        return binascii.a2b_hex(self.pubkey[2:])    # The prefix occupies two bytes.
+
 
 class RSAPublicKey(object):
     MODULUS_PREFIX = b'modulus='
-    BIT_LENGTH_KEYWORD = b'RSA Public-Key:'
+    BIT_LENGTH_KEYWORD = b'Public-Key:'
 
     def __init__(self, pubkey):
         self.pubkey = pubkey
@@ -220,18 +539,11 @@ class RSAPublicKey(object):
             raise HvbError("modular inverse does not exist.")
         return modinv_x % modulo
 
-    def incode_long(self, num_bits, value):
-        ret = bytearray()
-        for bit_pos in range(num_bits, 0, -8):
-            octet = (value >> (bit_pos - 8)) & 0xff
-            ret.extend(struct.pack('!B', octet))
-        return ret
-
     def get_public_key(self):
         pkey_n0 = 2 ** 64 - self.calc_modinv(self.modulusdata, 2 ** 64)
         pkey_r = 2 ** self.modulusdata.bit_length()
-        pkey_prr = bytes(self.incode_long(self.modulus_bits, pkey_r * pkey_r % self.modulusdata))
-        modulus = bytes(self.incode_long(self.modulus_bits, self.modulusdata))
+        pkey_prr = bytes(encode_long(self.modulus_bits, pkey_r * pkey_r % self.modulusdata))
+        modulus = bytes(encode_long(self.modulus_bits, self.modulusdata))
 
         return struct.pack('!QQ', self.modulus_bits, pkey_n0) + modulus + pkey_prr
 
@@ -312,7 +624,7 @@ class ImageHandle(object):
         self.img_handler.seek(0, os.SEEK_SET)
         header = self.img_handler.read(self.SIMAGE_HEADER_SIZE)
 
-        """ Sparse header 
+        """ Sparse header
             magic                  0xed26ff3a
             major_version          (0x1) - reject images with higher major versions
             minor_version          (0x0) - allow images with higer minor versions
@@ -434,7 +746,8 @@ class ImageHandle(object):
         if not self.is_sparse:
             self.img_handler.seek(0, os.SEEK_END)
             # This is more efficient that writing NUL bytes since it'll add
-            # a hole on file systems that support sparse files (native sparse).
+            # a hole on file systems that support sparse files (native
+            # sparse, not OpenHarmony sparse).
             self.img_handler.truncate(self.img_handler.tell() + num_bytes)
             self.header_analyze()
             return
@@ -589,9 +902,6 @@ class ImageHandle(object):
         """
         return self._file_pos
 
-    def calc_truncate_location(self):
-        pass
-
     def truncate(self, size):
         """Truncates the unsparsified file.
 
@@ -674,52 +984,39 @@ class HvbTool(object):
     VERITY_RESERVED = b'\0' * 36
     RVT_MAGIC = b'rot\0'
 
-    ALGORITHMS = {'SHA256_RSA3072': Algorithm(
-        sig_algo=0,
-        hash_algo='sha256',
-        bit_length=3072,
-        sig_bytes=384,
-        hash_bytes=32,
-        pubkey_bytes=8 + 2 * 3072 // 8
-        ), \
-        'SHA256_RSA4096': Algorithm(
-            sig_algo=1,
-            hash_algo='sha256',
-            bit_length=4096,
-            sig_bytes=512,
-            hash_bytes=32,
-            pubkey_bytes=8 + 2 * 4096 // 8
-        ), \
-        'SHA256_RSA2048': Algorithm(
-            sig_algo=2,
-            hash_algo='sha256',
-            bit_length=2048,
-            sig_bytes=256,
-            hash_bytes=32,
-            pubkey_bytes=8 + 2 * 2048 // 8
-        ) \
-    }
+    MAX_RVT_SIZE = 64 * 1024
+    MAX_FOOTER_SIZE = 4096
+
 
     def __init__(self):
         self.img = _params['image']
         self.partition = _params['partition']
-        self.partition_size = _params['partition_size']
+        self.partition_size = int(_params['partition_size'])
         self.vertype = _params['verity_type'].lower()  # verity type: hash - 1 or hashtree - 2 (fix)
         self.algo = _params['algorithm']
+        self.user_id = _params['userid']
         self.pubkey = _params['pubkey']
         self.privkey = _params['privkey']
-        self.hash_algo = _params['hash_algo']
         self.block_size = _params['block_size']
         self.padding_size = _params['padding_size']
+        self.signing_helper_with_files = _params['signing_helper_with_files']
+        self.calc_max_image_size = _params['calc_max_image_size'].lower()
         self.signed_img = _params['output']
-        if  _params['salt'] is not None:
+        self.hash_algo = ALGORITHMS[self.algo].hash_algo
+
+        if _params['salt'] is not None:
             self.salt = binascii.a2b_hex(_params['salt'])
+
+        if self.algo == 'SM2' and self.user_id is None:
+            self.user_id = create_random_data(16)    # Set user_id 16 bytes
+            print("USERID: {}".format(self.user_id))
 
         self.hashtree = b''
         self.digest = b''
         self.fec = b''
         self.hvb_cert_content = b''
 
+        self.hvb_calc_max_image()
         self.original_image_info()
 
     def original_image_info(self):
@@ -748,15 +1045,11 @@ class HvbTool(object):
         self.hvb_cert_content += struct.pack('2Q', int(_params['rollback_location']), int(_params['rollback_index']))
 
     def image_hash(self):
-        # 0: SHA256（verity_type为hash时的默认值）0：SHA256（verity_type为hashtree时的默认值）2：SHA512
-        if self.vertype == 'hash':
-            halgo = 0   # SHA256
-        elif self.vertype == 'hashtree':
-            halgo = 0   # SHA256
-        else:
-            halgo = 2   # SHA512
+        # 0: SHA256    1: SHA128    2: SHA512    3：SM3
+        halgo = HASH_ALGORITHM[ALGORITHMS[self.algo].hash_algo]
+        print("HALGO: {}".format(halgo))
 
-        print("digest: ", binascii.b2a_hex(self.digest))
+        print("digest: {}".format(binascii.b2a_hex(self.digest)))
         print("digest size: ", len(self.digest))
 
         hash_algo = struct.pack('I', halgo)
@@ -766,72 +1059,16 @@ class HvbTool(object):
         digest_size = struct.pack('Q', len(self.digest))
         return hash_algo + salt_offset + salt_size + digest_offset + digest_size
 
-    def generate_hash_tree(self, hash_level_offsets, tree_size):
-        hash_ret = bytearray(tree_size)
-        hash_src_offset = 0
-        hash_src_size = self.image_handle.img_size
-        level_num = 0
-        print("hash_level_offsets: {}, tree_size: {}".format(hash_level_offsets, tree_size))
-
-        while hash_src_size > self.block_size:
-            print("hash_src_size: ", hash_src_size)
-            level_output_list = []
-            remaining = hash_src_size
-            while remaining > 0:
-                hasher = hashlib.new(self.hash_algo, self.salt)
-                if level_num == 0:
-                    begin = hash_src_offset + hash_src_size - remaining
-                    end = min(remaining, self.block_size)
-                    self.image_handle.seek(begin)
-                    data = self.image_handle.read(end)
-                else:
-                    offset = hash_level_offsets[level_num - 1] + hash_src_size - remaining
-                    data = hash_ret[offset : offset + self.block_size]
-                hasher.update(data)
-
-                remaining -= len(data)
-                if len(data) < self.block_size:
-                    hasher.update(b'\0' * (self.block_size - len(data)))
-                level_output_list.append(hasher.digest())
-
-            level_output = b''.join(level_output_list)
-            level_output_padding = round_to_multiple(len(level_output), self.block_size) - len(level_output)
-            level_output += b'\0' * level_output_padding
-
-            offset = hash_level_offsets[level_num]
-            hash_ret[offset : offset + len(level_output)] = level_output
-
-            hash_src_size = len(level_output)
-            level_num += 1
-
-        hasher = hashlib.new(self.hash_algo, self.salt)
-        hasher.update(level_output)
-
-        return hasher.digest(), bytes(hash_ret)
-
     def create_hashtree(self, digest_size):
-        level_offsets = []
-        level_sizes = []
-
-        treesize = 0
-        levels = 0
         size = self.image_handle.img_size
 
-        while size > self.block_size:
-            blocknum = size // self.block_size
-            level_size = round_to_multiple(blocknum * digest_size, self.block_size)
-            level_sizes.append(level_size)
-            treesize += level_size
-            levels += 1
-            size = level_size
-        print("level_sizes: ", level_sizes)
-        for i in range(levels):
-            offset = 0
-            for j in range(i + 1, levels):
-                offset += level_sizes[j]
-            level_offsets.append(offset)
-
-        rootdigest, self.hashtree = self.generate_hash_tree(level_offsets, treesize)
+        level_offsets, tree_size = calc_hashtree_size(size, self.block_size, digest_size)
+        print("level_offsets: {}, tree_size: {}".format(level_offsets, tree_size))
+        if self.hash_algo == 'SM3':
+            rootdigest, self.hashtree = generate_sm3_hash_tree(self.image_handle, size, self.block_size, level_offsets, tree_size)
+        else:
+            rootdigest, self.hashtree = generate_sha_hash_tree(self.image_handle, size, self.block_size, self.hash_algo,
+                                                       self.salt, level_offsets, tree_size)
         if len(self.hashtree) % self.block_size != 0:
             self.hashtree += b'\0' * (self.block_size - len(self.hashtree) % self.block_size)
         print("root digest: ", binascii.b2a_hex(rootdigest))
@@ -850,19 +1087,24 @@ class HvbTool(object):
 
     def hvb_hash_info(self):
         verity_type = 0
+
         if self.vertype == 'hash':
             verity_type = 1    # hash: 1    hashtree: 2
 
-            self.image_handle.seek(0)
-            image_content = self.image_handle.read(self.image_handle.img_size)
-            hasher = hashlib.new(self.hash_algo, self.salt)
-            hasher.update(image_content)
-            self.digest = hasher.digest()
+            if self.hash_algo == 'SM3':
+                self.digest = get_sm3_digest(self.img)
+            else:
+                self.image_handle.seek(0)
+                image_content = self.image_handle.read(self.image_handle.img_size)
+                self.digest = get_sha256_digest(self.hash_algo, self.salt, image_content)
         elif self.vertype == 'hashtree':
             verity_type = 2    # hash: 1    hashtree: 2
 
-            hashtree_hasher = hashlib.new(self.hash_algo, self.salt)
-            digest_size = len(hashtree_hasher.digest())
+            if self.hash_algo == 'SM3':
+                digest_size = ALGORITHMS[self.algo].hash_bytes
+            else:
+                hashtree_hasher = hashlib.new(self.hash_algo, self.salt)
+                digest_size = len(hashtree_hasher.digest())
             digest_padding = 2 ** ((digest_size - 1).bit_length()) - digest_size
             print("hash_algo: {}, salt: {}".format(self.hash_algo, self.salt))
             print("digest_size: {}, digest_padding: {}".format(digest_size, digest_padding))
@@ -870,7 +1112,7 @@ class HvbTool(object):
             if remainder != self.block_size:
                 self.image_handle.append_raw(b'\0' * remainder)
             self.img_len_with_padding = self.image_handle.img_size
-            self.digest = self.create_hashtree(digest_size)
+            self.digest = self.create_hashtree(digest_size + digest_padding)
         else:
             print("[hvbtool][ERROR]: Invalid verity_type: %d", self.vertype)
             sys.exit(1)
@@ -879,55 +1121,122 @@ class HvbTool(object):
         imghashtree = self.image_hash_tree()
         hashpayload = self.salt + self.digest
 
-        hashinfo = imghash + imghashtree + hashpayload
+        hashinfo = struct.pack('I', verity_type) + imghash + imghashtree + hashpayload
         self.hashinfo_size = len(hashinfo)
-        self.hvb_cert_content += struct.pack('I', verity_type) + hashinfo
+        self.hvb_cert_content += hashinfo
+
+    def get_sign_command(self, sig_content_bin, to_be_sig_content_bin):
+        if self.algo == 'SM2':
+            cmd = [
+                    'openssl', 'dgst',  '-SM3', '-sign', self.privkey, '-sigopt', 'distid:{}'.format(self.user_id),
+                    '-out', sig_content_bin, to_be_sig_content_bin
+            ]
+        else:
+            cmd = [
+                    'openssl', 'dgst', '-sign', self.privkey, '-sigopt',  'rsa_padding_mode:pss',
+                    '-sigopt', 'rsa_pss_saltlen:{}'.format(len(self.salt)), '-sha256', '-out',
+                    sig_content_bin,  to_be_sig_content_bin
+            ]
+
+        return cmd
 
     def hvb_signature_info(self):
-        sig_content = 'sigcontent.bin'
+        sig_content_bin = os.sep.join([os.getcwd(), 'sigcontent.{0}.bin'.format(os.getpid())])
+        to_be_sig_content_bin = os.sep.join([os.getcwd(), 'tmp.{0}.bin'.format(os.getpid())])
         # 签名算法  0：SHA256_RSA3072（默认值）, 1：SHA256_RSA4096 , 2：SHA256_RSA2048
-        if self.algo not in self.ALGORITHMS:
+        if self.algo not in ALGORITHMS:
             raise HvbError("Unknown algorithm: {}".format(self.algo))
-        algo = self.ALGORITHMS[self.algo]
+        algo = ALGORITHMS[self.algo]
         flags = 0       # 预留的flag标记，默认全为0
+        user_id_len = 0
+        userid = b''
+
+        if self.user_id is not None:
+            user_id_len = len(self.user_id)
+            userid = self.user_id.encode()
+
         keyblock_offset = 144 + self.hashinfo_size + 112
 
         try:
-            key = RSAPublicKey(self.pubkey)
+            if self.algo == "SM2":
+                key = SMPublicKey(self.pubkey)
+            else:
+                key = RSAPublicKey(self.pubkey)
         except HvbError as err:
             sys.exit(1)
         keyblock = key.get_public_key()
 
         signature_offset = keyblock_offset + len(keyblock)
-
         sig_length = len(self.hvb_cert_content) + 112 + len(keyblock)
+        user_id_offset = signature_offset + algo.sig_bytes
+
+        print("user_id_offset: {}, user_id_len: {}".format(user_id_offset, user_id_len))
 
         self.hvb_cert_content += struct.pack('Q', sig_length) + struct.pack('I', algo.sig_algo) \
                         + struct.pack('I', flags) + struct.pack('Q', keyblock_offset) \
                         + struct.pack('Q', len(keyblock)) + struct.pack('Q', signature_offset) \
-                        + struct.pack('Q', algo.sig_bytes) + b'\0' * 64 + keyblock
+                        + struct.pack('Q', algo.sig_bytes) + struct.pack('Q', user_id_offset)  \
+                        + struct.pack('I', user_id_len) + b'\0' * 52 + keyblock    # reserved 52 bytes
 
-        if os.path.exists(sig_content):
-            os.remove(sig_content)
+        if os.path.exists(sig_content_bin):
+            os.remove(sig_content_bin)
 
-        flags = os.O_RDONLY | os.O_WRONLY | os.O_CREAT
+        flags = os.O_WRONLY | os.O_CREAT
         modes = stat.S_IWUSR | stat.S_IRUSR
-        with os.fdopen(os.open('tmp.bin', flags, modes), 'wb') as tmp_fd:
+        with os.fdopen(os.open(to_be_sig_content_bin, flags, modes), 'wb') as tmp_fd:
             tmp_fd.write(self.hvb_cert_content)
 
-        cmd = ['openssl', 'dgst', '-sign', self.privkey, '-sigopt',  'rsa_padding_mode:pss',
-                '-sigopt', 'rsa_pss_saltlen:{}'.format(len(self.salt)), '-sha256', '-out',
-                sig_content,  'tmp.bin']
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            print("Failed to sign the image.")
-            sys.exit(1)
+        if self.signing_helper_with_files is not None:
+            if len(self.salt) != 32:
+                raise HvbError("Salt len must be 32 bit, but current salt len is {} bit!".format(len(self.salt)))
+            p = subprocess.Popen([self.signing_helper_with_files, self.algo,
+                                  self.pubkey, to_be_sig_content_bin, sig_content_bin])
+            ret = p.wait()
+            if ret != 0:
+                raise HvbError("Failed to sign the image by {}".format(self.signing_helper_with_files))
+        else:
+            self.get_signature_content(sig_content_bin, to_be_sig_content_bin)
 
-        flags = os.O_RDONLY | os.O_EXCL
-        with os.fdopen(os.open(sig_content, flags, modes), 'rb') as sig_fd:
+        flags = os.O_RDONLY
+        with os.fdopen(os.open(sig_content_bin, flags, modes), 'rb') as sig_fd:
             sigcontent = sig_fd.read()
 
-        self.hvb_cert_content += sigcontent
+        self.hvb_cert_content += sigcontent + userid
+
+        if os.path.exists(sig_content_bin):
+            os.remove(sig_content_bin)
+        if os.path.exists(to_be_sig_content_bin):
+            os.remove(to_be_sig_content_bin)
+
+    def get_signature_content(self, sig_content_bin, to_be_sig_content_bin):
+        cmd = self.get_sign_command(sig_content_bin, to_be_sig_content_bin)
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            raise HvbError("Failed to sign the image.")
+
+        if self.algo == "SM2":
+            flags = os.O_RDWR
+            with os.fdopen(os.open(sig_content_bin, flags, stat.S_IWUSR | stat.S_IRUSR), 'r+b') as sig_fd:
+                content = sig_fd.read()
+                length = content[3]
+                if length != 32 and length != 33:
+                    raise HvbError("Invalid signature information.")
+
+                begin = 4 + length % 32
+                end = begin + 32
+                data1 = content[begin : end]
+
+                length = content[end + 1]
+                if length != 32 and length != 33:
+                    raise HvbError("Invalid signature information.")
+                begin = end + 2 + length % 32
+                end = begin + 32
+                data2 = content[begin : end]
+
+                data = b''.join([data1, data2])
+                sig_fd.seek(0)
+                sig_fd.truncate()
+                sig_fd.write(data)
 
     def hvb_footer_info(self):
         self.footer = b''
@@ -946,7 +1255,7 @@ class HvbTool(object):
                        + b'\0' * 64
 
     def hvb_make_rvt_image(self):
-        self.img = 'tmp_rvt.img'
+        self.img = 'tmp_{0}_rvt.img'.format(os.getpid())
         rvtcontent = b''
         rvtcontent += self.RVT_MAGIC
         verity_num = len(_params['chain_partition'])
@@ -959,7 +1268,10 @@ class HvbTool(object):
             pubkey = chain_partition_data[1].strip()
 
             try:
-                key = RSAPublicKey(pubkey)
+                if self.algo == 'SM2':
+                    key = SMPublicKey(pubkey)
+                else:
+                    key = RSAPublicKey(pubkey)
             except HvbError as err:
                 sys.exit(1)
             pubkey_payload = key.get_public_key()
@@ -971,9 +1283,6 @@ class HvbTool(object):
             rvtcontent += pubkey_payload  # pubkey_payload
             cur_sizes += 80 + pubkey_len
 
-        if os.path.exists(self.img):
-            os.remove(self.img)
-
         flags = os.O_WRONLY | os.O_RDONLY | os.O_CREAT
         modes = stat.S_IWUSR | stat.S_IRUSR
         with os.fdopen(os.open(self.img, flags, modes), 'wb') as rvt_fd:
@@ -981,6 +1290,9 @@ class HvbTool(object):
 
         self.original_image_info()
         self.hvb_make_image()
+
+        if os.path.exists(self.img):
+            os.remove(self.img)
 
     def hvb_combine_image_info(self):
         cert_and_footer = b''
@@ -1012,29 +1324,46 @@ class HvbTool(object):
             hashtree_length - hvb_cert_length - self.FOOTER_SIZE) + self.footer
         image.append_raw(self.hashtree)
         image.append_raw(cert_and_footer)
+        if image.img_handler:
+            image.img_handler.close()
 
     def parse_rvt_image(self, handle):
         handle.seek(0)
-        msg = ''
 
         header = handle.read(8)
         magic, verity_num = struct.unpack('4sI', header)
 
-        msg += "[rvt info]: \n"
+        msg = ["[rvt info]: \n"]
         if magic != self.RVT_MAGIC:
             raise HvbError("It is not a valid rvt image.")
 
         handle.seek(72)
         for i in range(verity_num):
-            #The size of pubkey_des excludes pubkey_payload is 80 bytes
+            # The size of pubkey_des excludes pubkey_payload is 80 bytes
             data = handle.read(80)
             name, pubkey_offset, pubkey_len = struct.unpack('64s2Q', data)
-            msg += '\tChain Partition descriptor: \n'
-            msg += '\t\tPartition Name:      {}\n'.format(name.decode())
+            msg.append('\tChain Partition descriptor: \n')
+            msg.append('\t\tPartition Name:      {}\n'.format(name.decode()))
             pubkey = handle.read(pubkey_len)
-            msg += "\t\tPublic key (sha256):   {}\n\n".format(hashlib.sha256(pubkey).hexdigest())
+            msg.append("\t\tPublic key (sha256):   {}\n\n".format(hashlib.sha256(pubkey).hexdigest()))
 
-        print(msg)
+        print(''.join(msg))
+
+    def hvb_calc_max_image(self):
+        if self.calc_max_image_size == "true":
+            max_metadata_size = self.MAX_RVT_SIZE + self.MAX_FOOTER_SIZE
+
+            if self.vertype == 'hashtree':
+                hashtree_hasher = hashlib.new(self.hash_algo, self.salt)
+                digest_size = len(hashtree_hasher.digest())
+                digest_padding = 2 ** ((digest_size - 1).bit_length()) - digest_size
+
+                _, hashtree_size = calc_hashtree_size(self.partition_size, self.block_size, digest_size)
+                max_metadata_size += hashtree_size
+
+            max_image_size = self.partition_size - max_metadata_size
+            print("\ncalc_max_image_size: {}".format(max_image_size))
+            sys.exit(0)
 
     def hvb_make_image(self):
         self.hvb_header()
@@ -1061,6 +1390,9 @@ class HvbTool(object):
                 self.parse_rvt_image(image)
         except (HvbError, struct.error):
             raise HvbError("Failed to parse the image!")
+        finally:
+            if image.img_handler:
+                image.img_handler.close()
 
     def hvb_erase_image(self):
         try:
@@ -1072,11 +1404,44 @@ class HvbTool(object):
             image.truncate(footer.imagesize)
         except (HvbError, struct.error):
             raise HvbError("Failed to erase image.")
+        finally:
+            if image.img_handler:
+                image.img_handler.close()
+
+    def hvb_verify_image(self):
+        try:
+            key_blob = RSAPublicKey(self.pubkey).get_public_key()
+            print('Verifying image {} using key at {}'.format(self.img, self.pubkey))
+        except HvbError as err:
+            print('Pubkey {} is invalid!'.format(self.pubkey))
+            sys.exit(1)
+
+        try:
+            image = ImageHandle(self.img)
+            image.seek(self.original_image_length - self.FOOTER_SIZE)
+            footer_bin = image.read(self.FOOTER_SIZE)
+            footer = HvbFooter(footer_bin)
+
+            image.seek(footer.certoffset)
+            cert_bin = image.read(footer.certsize)
+            cert = HvbCert(cert_bin)
+            if key_blob and key_blob != cert.key:
+                raise HvbError('Embedded public key does not match given key.')
+            if not cert.verify_signature(self.pubkey):
+                raise HvbError('Failed check signature for {}!'.format(self.img))
+            if not cert.verify_digest(image):
+                raise HvbError('Failed check digest for {}!'.format(self.img))
+            print('Successfully verified hvb cert for {}!'.format(self.img))
+        except (HvbError, struct.error):
+            raise HvbError("Failed to verify image.")
+        finally:
+            if image.img_handler:
+                image.img_handler.close()
 
 
 def print_help():
     print("usage: hvbtool.py [-h]")
-    print("\t\t{make_hash_footer, make_hashtree_footer, make_rvt_image, parse_image}")
+    print("\t\t{make_hash_footer, make_hashtree_footer, make_rvt_image, parse_image, erase_image}")
 
 
 def parse_arguments(argvs):
@@ -1097,7 +1462,6 @@ def parse_arguments(argvs):
     act = args[0][1]
     if act.strip() in VERITY_TYPE.keys():
         _params['verity_type'] = VERITY_TYPE[act]
-        print(_params['verity_type'])
     else:
         _params['verity_type'] = 'hash'
 
@@ -1111,6 +1475,9 @@ def parse_arguments(argvs):
         else:
             print("[hvbtool][ERROR]: Unknown argument: %s" % item[0])
             sys.exit(1)
+
+    if  _params['salt'] is None:
+        _params['salt'] = create_random_data()
     return act
 
 
@@ -1119,13 +1486,22 @@ def necessary_arguments_check(check_list):
         if _params[item] is None or len(_params[item]) == 0:
             print("[hvbtool][ERROR]: The argument '{}' is necessary.".format(item))
             return False
+
     return True
 
 
+def check_privkey_arg(act):
+    if (act == 'make_hash_footer') or (act == 'make_hashtree_footer') or (act == 'make_rvt_image'):
+        if _params['privkey'] is None and _params['signing_helper_with_files'] is None:
+            print("[hvbtool][ERROR]: The argument 'privkey' is necessary.")
+            sys.exit(1)
+
+
 def check_arguments(act):
-    make_image_arguments_list = ['image', 'salt', 'pubkey', 'rollback_index', 'rollback_location']
-    make_rvt_image_arguments_list = ['salt', 'pubkey', 'rollback_index', 'rollback_location', 'chain_partition']
+    make_image_arguments_list = ['image', 'algorithm', 'pubkey', 'rollback_index', 'rollback_location']
+    make_rvt_image_arguments_list = ['algorithm', 'pubkey', 'rollback_index', 'rollback_location', 'chain_partition']
     parse_erase_image_arguments_list = ['image']
+    verify_image_arguments_list = ['image', 'pubkey']
     ret = False
 
     if act == 'make_hash_footer' or act == 'make_hashtree_footer':
@@ -1134,11 +1510,15 @@ def check_arguments(act):
         ret = necessary_arguments_check(make_rvt_image_arguments_list)
     elif act == 'parse_image' or act == 'erase_image':
         ret = necessary_arguments_check(parse_erase_image_arguments_list)
+    elif act == 'verify_image':
+        ret = necessary_arguments_check(verify_image_arguments_list)
     else:
         print("[hvbtool][ERROR]: Unkown action: {}".format(act))
 
     if ret is False:
         sys.exit(1)
+
+    check_privkey_arg(act)
 
 
 def main(obj, act):
@@ -1150,6 +1530,8 @@ def main(obj, act):
         obj.hvb_make_rvt_image()
     elif act == 'erase_image':
         obj.hvb_erase_image()
+    elif act == 'verify_image':
+        obj.hvb_verify_image()
     else:
         raise HvbError("Unknown action: {}".format(act))
 
@@ -1162,4 +1544,7 @@ if __name__ == '__main__':
     except (HvbError, struct.error):
         print("HVB COMMAND FAILED!")
         sys.exit(1)
+    finally:
+        if tool.image_handle.img_handler:
+            tool.image_handle.img_handler.close()
     sys.exit(0)
