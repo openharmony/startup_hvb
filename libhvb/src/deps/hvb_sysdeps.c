@@ -76,6 +76,11 @@ void hvb_print(const char *message)
     printf("%s\n", message);
 }
 
+void hvb_print_u64(uint64_t num)
+{
+    printf("0x%lx,", num);
+}
+
 void hvb_printv(const char *message, ...)
 {
     va_list ap;
@@ -90,6 +95,10 @@ void hvb_printv(const char *message, ...)
 
 void *hvb_malloc_(size_t size)
 {
+    if (size == 0) {
+        hvb_print("size is invalid");
+        return NULL;
+    }
     return malloc(size);
 }
 

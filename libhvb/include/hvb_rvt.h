@@ -27,7 +27,10 @@ extern "C" {
 #define RVT_MAGIC_LEN                4
 #define RVT_RELEASE_SIZE             64
 #define MAX_NUMBER_OF_RVT_IMAGES     32
-#define PUBKEY_LEN                   1040
+#define MAX_PUBKEY_LEN               1040
+#define PUBKEY_LEN_4096              1040
+#define PUBKEY_LEN_2048              528
+#define PUBKEY_LEN_SM                64
 #define PARTITION_NAME_LEN           64
 
 /* Maximum size of a rvt image - 64 KiB. */
@@ -44,7 +47,7 @@ struct rvt_pubk_desc {
     uint64_t pubkey_len;
 
     /* pubkey_payload. */
-    uint8_t pubkey_payload[PUBKEY_LEN];
+    uint8_t pubkey_payload[MAX_PUBKEY_LEN];
 } HVB_ATTR_PACKED;
 
 struct rvt_image_header {

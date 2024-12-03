@@ -16,11 +16,12 @@
 #include "hvb_ops.h"
 #include "hvb_cert.h"
 #include "hvb_util.h"
+#include "hvb_sm3.h"
 
-enum hvb_errno hvb_calculate_certs_digest(struct hvb_verified_data *vd, uint8_t *out_digest)
+static enum hvb_errno hvb_calculate_certs_digest_rsa(struct hvb_verified_data *vd, uint8_t *out_digest)
 {
     uint64_t n;
-    int ret = -1;
+    int ret;
     struct hash_ctx_t ctx;
 
     ret = hash_ctx_init(&ctx, HASH_ALG_SHA256);
@@ -44,6 +45,57 @@ enum hvb_errno hvb_calculate_certs_digest(struct hvb_verified_data *vd, uint8_t 
     }
 
     return HVB_OK;
+}
+
+static enum hvb_errno hvb_calculate_certs_digest_sm(struct hvb_verified_data *vd, uint8_t *out_digest)
+{
+    uint64_t n;
+    uint32_t out_len = HVB_SM3_DIGEST_BYTES;
+    int ret;
+    struct sm3_ctx_t ctx;
+
+    if (vd == NULL || out_digest == NULL) {
+        hvb_print("arguments are invalid in hvb_calculate_certs_digest_sm\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    ret = hvb_sm3_init(&ctx);
+    if (ret != SM3_OK) {
+        hvb_print("error, hash_ctx_init.\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    for (n = 0; n < vd->num_loaded_certs; n++) {
+        ret = hvb_sm3_update(&ctx, vd->certs[n].data.addr, vd->certs[n].data.size);
+        if (ret != SM3_OK) {
+            hvb_print("error, hash_calc_update.\n");
+            return HVB_ERROR_INVALID_ARGUMENT;
+        }
+    }
+
+    ret = hvb_sm3_final(&ctx, out_digest, &out_len);
+    if (ret != SM3_OK) {
+        hvb_print("error, hash_calc_do_final.\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    return HVB_OK;
+}
+
+enum hvb_errno hvb_calculate_certs_digest(struct hvb_verified_data *vd, uint8_t *out_digest)
+{
+    switch (vd->algorithm) {
+        case 0: // SHA256_RSA3072
+        case 1: // SHA256_RSA4096
+        case 2: // SHA256_RSA2048
+            return hvb_calculate_certs_digest_rsa(vd, out_digest);
+        case 3: // sm2_sm3
+            return hvb_calculate_certs_digest_sm(vd, out_digest);
+        default: {
+            hvb_print("hvb_calculate_certs_digest error: invalid algorithm\n");
+            return HVB_ERROR_INVALID_ARGUMENT;
+        }
+    }
 }
 
 enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *header, uint64_t desc_size)

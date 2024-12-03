@@ -75,9 +75,8 @@ static int lin_compare(struct long_int_num *p_a, struct long_int_num *p_b)
 
     for (i = p_a->valid_word_len - 1; i >= 0; --i) {
         if (p_a->p_uint[i] != p_b->p_uint[i]) {
-            if (p_a->p_uint[i] > p_b->p_uint[i]) {
+            if (p_a->p_uint[i] > p_b->p_uint[i])
                 return 1;
-            }
             return -1;
         }
     }
@@ -142,8 +141,8 @@ void lin_free(struct long_int_num *p_long_int)
 
 uint32_t bn_get_valid_len(const uint8_t *pd, uint32_t size)
 {
-    uint32_t i = 0;
-    uint32_t valid_len = size;
+	uint32_t i = 0;
+	uint32_t valid_len = size;
 
     if (!pd) {
         return 0;
@@ -153,7 +152,7 @@ uint32_t bn_get_valid_len(const uint8_t *pd, uint32_t size)
         valid_len--;
     }
 
-    return valid_len;
+	return valid_len;
 }
 
 void lin_update_valid_len(struct long_int_num *p_a)
@@ -186,7 +185,7 @@ static void lin_mul_word(unsigned long a, unsigned long b, unsigned long *res_hi
 
 #if defined(__uint128_t)
     #if __WORDSIZE == 32
-    unsigned long long aa;
+    unsigned long long aa, bb;
 #elif __WORDSIZE == 64
     __uint128_t aa, bb;
 #else
@@ -249,9 +248,9 @@ static void lin_sub(struct long_int_num *p_a, struct long_int_num *p_b)
     lin_update_valid_len(p_a);
 }
 
-#define dword_add_word(a, b, r)		       \
-    do {				       \
-        r##_l = a##_l + (b);	       \
+#define dword_add_word(a, b, r)               \
+    do {                       \
+        r##_l = a##_l + (b);           \
         r##_h = a##_h + (r##_l < (b)); \
     } while (0)
 
@@ -267,7 +266,7 @@ static void montgomery_mul_add(struct long_int_num *p_a, unsigned long b, struct
     unsigned long *p_rd = p_res->p_uint;
     uint32_t i;
 
-    while (p_a->valid_word_len > p_n->valid_word_len){
+    while (p_a->valid_word_len > p_n->valid_word_len) {
         lin_sub(p_a, p_n);
     }
 
@@ -382,9 +381,8 @@ uint32_t lin_get_bitlen(struct long_int_num *p_a)
     }
     p_data = p_a->p_uint;
     for (i = p_a->valid_word_len - 1; i >= 0; --i) {
-        if (p_data[i] != 0) {
+        if (p_data[i] != 0)
             break;
-        }
     }
 
     bit_len = (i + 1) * WORD_BIT_SIZE;
