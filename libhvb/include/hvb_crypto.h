@@ -28,6 +28,7 @@
 
 #define HVB_SHA256_DIGEST_BYTES 32
 #define HVB_SHA512_DIGEST_BYTES 64
+#define HVB_SM3_DIGEST_BYTES 32
 /* sha512 is 64 bytes */
 #define HVB_HASH_MAX_BYTES      64
 
@@ -56,7 +57,7 @@ struct hash_ctx_t {
     uint8_t  blk_buf[BLK_BYTE_SIZE_SHA256];
 };
 
-int hash_ctx_init(struct hash_ctx_t *hash_ctx, enum hash_alg_type);
+int hash_ctx_init(struct hash_ctx_t *hash_ctx, enum hash_alg_type alg_type);
 
 int hash_calc_update(struct hash_ctx_t *hash_ctx, const void *msg, uint32_t msg_len);
 
@@ -74,7 +75,6 @@ int hash_sha256_single(const void *msg, uint32_t msg_len, uint8_t *out, uint32_t
 * Return VERIFY_OK if verification success, error code otherwise.
 */
 int hvb_rsa_verify_pss(const struct hvb_rsa_pubkey *pkey, const uint8_t *pdigest,
-                       uint32_t digestlen, uint8_t *psign,
-                       uint32_t signlen, uint32_t saltlen);
-
+    uint32_t digestlen, uint8_t *psign,
+    uint32_t signlen, uint32_t saltlen);
 #endif

@@ -37,6 +37,7 @@
               "hvb_footer.h",
               "hvb_ops.h",
               "hvb_rvt.h",
+              "hvb_sm2.h",
               "hvb_sysdeps.h",
               "hvb_types.h",
               "hvb_util.h",

@@ -57,8 +57,7 @@ struct hvb_verified_data *hvb_init_verified_data(void)
 
     vd->cmdline.cur_pos = 0;
     vd->cmdline.max_size = CMD_LINE_SIZE;
-
-    vd->key_len = 0;
+    vd->algorithm = 0;
 
     return vd;
 
@@ -126,6 +125,35 @@ static bool hvb_buf_equal(const struct hvb_buf *buf1, const struct hvb_buf *buf2
     return buf1->size == buf2->size && hvb_memcmp(buf1->addr, buf2->addr, buf1->size) == 0;
 }
 
+static uint64_t get_desc_size(uint32_t algo, uint64_t *desc_size)
+{
+    *desc_size = sizeof(struct rvt_pubk_desc);
+    uint64_t key_len = 0;
+    switch (algo) {
+        case 1: { // SHA256_RSA4096
+            key_len = PUBKEY_LEN_4096;
+            break;
+        }
+        case 2: { // SHA256_RSA2048
+            key_len = PUBKEY_LEN_2048;
+            break;
+        }
+        case 3: { // SM3
+            key_len = PUBKEY_LEN_SM;
+            break;
+        }
+        default: {
+            hvb_print("hash algo dsnt support\n");
+            return -1;
+        }
+    }
+
+    /* desc size larger than MAX_PUBKEY_LEN */
+    *desc_size = sizeof(struct rvt_pubk_desc) - MAX_PUBKEY_LEN + key_len;
+
+    return 0;
+}
+
 static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *const *ptn_list,
                                             struct hvb_buf *rvt, struct hvb_verified_data *vd)
 {
@@ -138,7 +166,12 @@ static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *con
     struct rvt_image_header header;
     uint64_t desc_size;
 
-    desc_size = sizeof(desc) - (PUBKEY_LEN - vd->key_len);
+    ret = get_desc_size(vd->algorithm, &desc_size);
+    if (ret < 0) {
+        hvb_print("error, get desc size.\n");
+        goto fail;
+    }
+
     ret = hvb_rvt_head_parser(rvt, &header, desc_size);
     if (ret != HVB_OK) {
         hvb_print("error, parse rvt header.\n");
@@ -237,7 +270,7 @@ enum hvb_errno hvb_chain_verify(struct hvb_ops *ops,
         hvb_print("error, check ops\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
- 
+
     if (hvb_strnlen(rvt_ptn, HVB_MAX_PARTITION_NAME_LEN) >= HVB_MAX_PARTITION_NAME_LEN) {
         hvb_print("error, check rvt partition name\n");
         return HVB_ERROR_INVALID_ARGUMENT;
@@ -277,6 +310,9 @@ enum hvb_errno hvb_chain_verify(struct hvb_ops *ops,
         hvb_print("error, walk nodes.\n");
         goto fail;
     }
+
+    hvb_print("hash algorithm is");
+    hvb_print_u64(vd->algorithm);
 
     /* creat cmdline info */
     ret = hvb_creat_cmdline(ops, vd);
