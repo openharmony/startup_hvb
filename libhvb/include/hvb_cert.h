@@ -30,10 +30,12 @@ extern "C"
 
 /* Maximum size of the release string including the terminating NUL byte. */
 #define HVB_VERITY_RESERVED_SIZE     36
-#define HVB_SIGNATURE_RESERVED_SIZE  64
+#define HVB_SIGNATURE_RESERVED_SIZE  52
 #define VERITY_NAME_SIZE             64
 #define HVB_SIGNATURE_MAX_SIZE       4096
 #define HVB_CERT_MAX_SIZE            4096
+
+#define HVB_HASH_SIZE_RSA            32
 
 /* The version number of HVB - keep in sync with hvbtool. */
 #define HVB_VERSION_MAJOR            1
@@ -64,9 +66,12 @@ struct hvb_sign_info {
     uint64_t pubkey_len;
     uint64_t signature_offset;
     uint64_t signature_len;
+    uint64_t user_id_offset;
+    uint32_t user_id_len;
     uint8_t signature_reserved[HVB_SIGNATURE_RESERVED_SIZE];
     struct hvb_buf pubk;
     struct hvb_buf sign;
+    struct hvb_buf user_id;
 } HVB_ATTR_PACKED;
 
 struct hvb_cert {
@@ -153,8 +158,8 @@ struct hvb_cert {
 } HVB_ATTR_PACKED;
 
 enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_buf *cert_buf,
-                              const char *const *hash_ptn_list, struct hvb_buf *out_pubk,
-                              struct hvb_verified_data *verified_data);
+    const char *const *hash_ptn_list, struct hvb_buf *out_pubk,
+    struct hvb_verified_data *vd);
 enum hvb_errno hvb_cert_parser(struct hvb_cert *cert, struct hvb_buf *cert_buf);
 
 #ifdef __cplusplus

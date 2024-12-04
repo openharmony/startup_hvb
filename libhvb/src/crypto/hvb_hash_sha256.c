@@ -180,7 +180,7 @@ __attribute__((weak)) int sha256_data_blk_update(uint32_t *iv, const void *msg, 
     return 0;
 }
 
-static void hash_sha256_pad_update(uint32_t *iv, const void *left_msg, uint64_t left_len, uint64_t total_bit_len)
+static int hash_sha256_pad_update(uint32_t *iv, const void *left_msg, uint64_t left_len, uint64_t total_bit_len)
 {
     uint32_t pad_word_len;
     uint32_t sha256_pad[PAD_BLK_WORD_SIZE_SHA256];
@@ -190,7 +190,7 @@ static void hash_sha256_pad_update(uint32_t *iv, const void *left_msg, uint64_t 
     if (left_len != 0) {
         if (hvb_memcpy_s(sha256_pad, sizeof(sha256_pad), left_msg, (uint32_t)left_len) != 0) {
             hvb_print("error, memcpy_s fail.\n");
-            return;
+            return HASH_ERR_MEMORY;
         }
     }
 
@@ -207,7 +207,7 @@ static void hash_sha256_pad_update(uint32_t *iv, const void *left_msg, uint64_t 
     fill_zero_len = word2byte(pad_word_len) - (uint32_t)left_len - PAD_INFO_BYTE_LEN_SHA256;
     if (hvb_memset_s(pad_ptr + left_len, sizeof(sha256_pad) - left_len, 0, fill_zero_len) != 0) {
         hvb_print("error, memset_s fail.\n");
-        return;
+        return HASH_ERR_MEMORY;
     }
 
     sha256_pad[pad_word_len - 1] = htobe32((uint32_t)total_bit_len);
@@ -215,6 +215,8 @@ static void hash_sha256_pad_update(uint32_t *iv, const void *left_msg, uint64_t 
     sha256_pad[pad_word_len - 2] = htobe32((uint32_t)total_bit_len);
 
     sha256_data_blk_update(iv, sha256_pad, word2byte(pad_word_len));
+
+    return HASH_OK;
 }
 
 static int hash_sha256_output_iv(uint32_t *iv, uint8_t *out, uint32_t out_len)
@@ -239,6 +241,7 @@ static int hash_sha256_output_iv(uint32_t *iv, uint8_t *out, uint32_t out_len)
 
 int hash_sha256_single(const void *msg, uint32_t msg_len, uint8_t *out, uint32_t out_len)
 {
+    int ret;
     uint64_t data_size;
     uint64_t total_bit_len;
     uint32_t iv[IV_WORD_SIZE_SHA256];
@@ -262,7 +265,10 @@ int hash_sha256_single(const void *msg, uint32_t msg_len, uint8_t *out, uint32_t
         sha256_data_blk_update(iv, msg, data_size);
     }
 
-    hash_sha256_pad_update(iv, (uint8_t *)msg + data_size, msg_len - data_size, total_bit_len);
+    ret = hash_sha256_pad_update(iv, (uint8_t *)msg + data_size, msg_len - data_size, total_bit_len);
+    if(ret != HASH_OK) {
+        return ret;
+    }
 
     return hash_sha256_output_iv(iv, out, out_len);
 }
@@ -306,7 +312,7 @@ int hash_calc_update(struct hash_ctx_t *hash_ctx, const void *msg, uint32_t msg_
     uint32_t blk_len;
     uint32_t calc_len;
 
-    if(msg_len == 0) {
+    if (msg_len == 0) {
         return HASH_OK;
     }
 
@@ -375,7 +381,10 @@ int hash_calc_do_final(struct hash_ctx_t *hash_ctx, const void *msg, uint32_t ms
         return HASH_ERR_TOTAL_LEN;
     }
 
-    hash_sha256_pad_update(hash_ctx->iv, hash_ctx->blk_buf, hash_ctx->buf_len, total_bit_len);
+    ret = hash_sha256_pad_update(hash_ctx->iv, hash_ctx->blk_buf, hash_ctx->buf_len, total_bit_len);
+    if(ret != HASH_OK) {
+        return ret;
+    }
 
     return hash_sha256_output_iv(hash_ctx->iv, out, out_len);
 }

@@ -15,6 +15,9 @@
 #include "hvb_util.h"
 #include "hvb_types.h"
 
+#define WORD_BYTE_SIZE sizeof(unsigned long)
+#define BYTES_PER_TYPE(type) sizeof(type)
+
 char *hvb_bin2hex(const uint8_t *value, size_t len)
 {
     const char digits[MAX_STRING_LEN] = "0123456789abcdef";
@@ -57,16 +60,11 @@ uint64_t hvb_uint64_to_base10(uint64_t value, char digits[HVB_MAX_DIGITS_UINT64]
 uint64_t hvb_be64toh(uint64_t data)
 {
     uint8_t *value = (uint8_t *)&data;
-    uint64_t hex;
+    uint64_t hex = 0;
 
-    hex = ((uint64_t)value[0]) << 56;
-    hex |= ((uint64_t)value[1]) << 48;
-    hex |= ((uint64_t)value[2]) << 40;
-    hex |= ((uint64_t)value[3]) << 32;
-    hex |= ((uint64_t)value[4]) << 24;
-    hex |= ((uint64_t)value[5]) << 16;
-    hex |= ((uint64_t)value[6]) << 8;
-    hex |= ((uint64_t)value[7]);
+    for (int i = BYTES_PER_TYPE(unsigned long) - 1; i >= 0; i--)
+        hex |= ((uint64_t)value[i] << ((BYTES_PER_TYPE(unsigned long) - 1 - i) * BYTES_PER_TYPE(unsigned long)));
+
     return hex;
 }
 
@@ -74,17 +72,14 @@ uint64_t hvb_htobe64(uint64_t data)
 {
     union {
         uint64_t word;
-        uint8_t bytes[8];
+        uint8_t bytes[BYTES_PER_TYPE(unsigned long)];
     } ret;
 
-    ret.bytes[0] = (data >> 56) & 0xff;
-    ret.bytes[1] = (data >> 48) & 0xff;
-    ret.bytes[2] = (data >> 40) & 0xff;
-    ret.bytes[3] = (data >> 32) & 0xff;
-    ret.bytes[4] = (data >> 24) & 0xff;
-    ret.bytes[5] = (data >> 16) & 0xff;
-    ret.bytes[6] = (data >> 8) & 0xff;
-    ret.bytes[7] = data & 0xff;
+    for (int i = BYTES_PER_TYPE(unsigned long) - 1; i >= 0; i--) {
+        ret.bytes[i] = (uint8_t)(data & 0xff);
+        data >>= BYTES_PER_TYPE(unsigned long);
+    }
+
     return ret.word;
 }
 

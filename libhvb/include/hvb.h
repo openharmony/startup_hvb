@@ -76,15 +76,22 @@ struct hvb_verified_data {
     struct hvb_image_data *images;
     uint64_t num_loaded_images;
     struct hvb_cmdline_data cmdline;
-    uint64_t key_len;
     uint64_t rollback_indexes[HVB_MAX_NUMBER_OF_ROLLBACK_INDEX_LOCATIONS];
+    /*
+     * The algorithm for calculated image hash.
+     * 0: SHA256_RSA3072
+     * 1: SHA256_4096
+     * 2: SHA256_2048
+     * 3: SM
+     */
+    uint32_t algorithm;
 };
 
 struct hvb_verified_data *hvb_init_verified_data(void);
-enum hvb_errno hvb_chain_verify(struct hvb_ops *ops, const char *rvt_parttion_name,
-                                const char *const *hash_ptn_list,
-                                struct hvb_verified_data **out_data);
-void hvb_chain_verify_data_free(struct hvb_verified_data *verified_data);
+enum hvb_errno hvb_chain_verify(struct hvb_ops *ops, const char *rvt_ptn,
+    const char *const *hash_ptn_list,
+    struct hvb_verified_data **out_vd);
+void hvb_chain_verify_data_free(struct hvb_verified_data *vd);
 
 #ifdef __cplusplus
 }

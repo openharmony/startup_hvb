@@ -20,8 +20,12 @@
 #include "hvb_crypto.h"
 #include "hvb_sysdeps.h"
 #include "hvb_cert.h"
+#include "hvb_sm2.h"
+#include "hvb_sm3.h"
 
-
+#define SM2_KEY_X_LEN SM2_KEY_LEN
+#define SM2_KEY_Y_LEN SM2_KEY_LEN
+#define SM_ALGO 3
 static bool hvb_need_verify_hash(const char *const *hash_ptn_list, const char *ptn)
 {
     size_t n;
@@ -50,7 +54,9 @@ static uint64_t get_hash_size(uint32_t algo)
         case 0: // SHA256_RSA3072
         case 1: // SHA256_RSA4096
         case 2: // SHA256_RSA2048
-            return 32;
+            return HVB_HASH_SIZE_RSA;
+        case 3: // SM3
+            return SM3_IV_BYTE_SIZE;
         default:
             return 0;
     }
@@ -58,8 +64,9 @@ static uint64_t get_hash_size(uint32_t algo)
     return 0;
 }
 
-static enum hvb_errno hvb_compare_hash(struct hvb_buf *digest_buf, struct hvb_buf *msg_buf,
-                                       struct hvb_buf *salt_buf, uint32_t hash_algo)
+
+static enum hvb_errno hvb_compare_hash_rsa(struct hvb_buf *digest_buf, struct hvb_buf *msg_buf,
+                                           struct hvb_buf *salt_buf, uint32_t hash_algo)
 {
     int hash_err;
     struct hash_ctx_t ctx = {0};
@@ -95,6 +102,53 @@ static enum hvb_errno hvb_compare_hash(struct hvb_buf *digest_buf, struct hvb_bu
     }
 
     return HVB_OK;
+}
+
+static enum hvb_errno hvb_compare_hash_sm(struct hvb_buf *digest_buf, struct hvb_buf *msg_buf, uint32_t hash_algo)
+{
+    int hash_err;
+    uint8_t computed_hash[HVB_HASH_MAX_BYTES] = {0};
+
+    if (digest_buf == NULL || msg_buf == NULL) {
+        hvb_print("arguments are invalid in hvb_compare_hash_sm\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    uint32_t computed_hash_size = SM3_IV_BYTE_SIZE;
+    if (computed_hash_size != digest_buf->size) {
+        hvb_print("computed_hash_size error\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    hash_err = hvb_sm3_single(msg_buf->addr, msg_buf->size, &computed_hash[0], &computed_hash_size);
+    if (hash_err != SM3_OK) {
+        hvb_print("hvb_sm3_single error\n");
+        return HVB_ERROR_VERIFY_HASH;
+    }
+
+    if (hvb_memcmp(&computed_hash[0], digest_buf->addr, computed_hash_size) != 0) {
+        hvb_print("hash compare fail\n");
+        return HVB_ERROR_VERIFY_HASH;
+    }
+
+    return HVB_OK;
+}
+
+static enum hvb_errno hvb_compare_hash(struct hvb_buf *digest_buf, struct hvb_buf *msg_buf,
+                                       struct hvb_buf *salt_buf, uint32_t hash_algo)
+{
+    switch (hash_algo) {
+        case 0: // SHA256_RSA3072
+        case 1: // SHA256_RSA4096
+        case 2: // SHA256_RSA2048
+            return hvb_compare_hash_rsa(digest_buf, msg_buf, salt_buf, hash_algo);
+        case 3: // sm2_sm3
+            return hvb_compare_hash_sm(digest_buf, msg_buf, hash_algo);
+        default: {
+            hvb_print("invalid algorithm\n");
+            return HVB_ERROR_INVALID_ARGUMENT;
+        }
+    }
 }
 
 static enum hvb_errno hash_image_init_desc(struct hvb_ops *ops, const char *ptn,
@@ -199,32 +253,32 @@ static enum hvb_errno _hvb_cert_payload_parser_v2(struct hvb_cert *cert, uint8_t
 {
     struct hash_payload *payload = &cert->hash_payload;
     uint8_t *cur_header;
- 
+
     if (header + cert->salt_offset > end || header + cert->salt_offset <= header) {
         hvb_print("error, illegal salt offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     cur_header = header + cert->salt_offset;
- 
+
     if (cur_header + cert->salt_size > end || cur_header + cert->salt_size <= cur_header) {
         hvb_print("error, dc salt.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     payload->salt = cur_header;
- 
+
     if (header + cert->digest_offset > end || header + cert->digest_offset <= header) {
         hvb_print("error, illegal digest offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     cur_header = header + cert->digest_offset;
- 
+
     if (cur_header + cert->digest_size > end || cur_header + cert->digest_size <= cur_header) {
         hvb_print("error, dc digest.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     payload->digest = cur_header;
     *p = cur_header + cert->digest_size;
- 
+
     return HVB_OK;
 }
 
@@ -266,11 +320,11 @@ static enum hvb_errno _hvb_cert_signature_parser(struct hvb_cert *cert, uint8_t 
 
 static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8_t **p, uint8_t *end, uint8_t *header)
 {
-    struct hvb_buf buf;
+    struct hvb_buf buf = {0};
     struct hvb_sign_info *sign_info = &cert->signature_info;
     size_t cp_size = hvb_offsetof(struct hvb_sign_info, pubk);
     uint8_t *cur_header;
- 
+
     if (!_decode_octets(&buf, cp_size, p, end)) {
         hvb_print("error, dc sign info const.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
@@ -279,33 +333,49 @@ static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8
         hvb_print("error, copy dc sign info const.\n");
         return HVB_ERROR_OOM;
     }
- 
+
     if (header + sign_info->pubkey_offset > end || header + sign_info->pubkey_offset <= header) {
         hvb_print("error, illegal pubkey offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     cur_header = header + sign_info->pubkey_offset;
- 
+
     if (cur_header + sign_info->pubkey_len > end || cur_header + sign_info->pubkey_len <= cur_header) {
         hvb_print("error, dc pubkey.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     sign_info->pubk.addr = cur_header;
     sign_info->pubk.size = sign_info->pubkey_len;
- 
+
     if (header + sign_info->signature_offset > end || header + sign_info->signature_offset <= header) {
         hvb_print("error, illegal signature offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     cur_header = header + sign_info->signature_offset;
- 
+
     if (cur_header + sign_info->signature_len > end || cur_header + sign_info->signature_len <= cur_header) {
-        hvb_print("error, dc pubkey.\n");
+        hvb_print("error, dc sign.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     sign_info->sign.addr = cur_header;
     sign_info->sign.size = sign_info->signature_len;
- 
+
+    /* only SM hash algo need user_id */
+    if (sign_info->algorithm == SM_ALGO) {
+        if (header + sign_info->user_id_offset > end || header + sign_info->user_id_offset <= header) {
+            hvb_print("error, illegal user_id offset.\n");
+            return HVB_ERROR_INVALID_CERT_FORMAT;
+        }
+        cur_header = header + sign_info->user_id_offset;
+
+        if (cur_header + sign_info->user_id_len > end || cur_header + sign_info->user_id_len <= cur_header) {
+            hvb_print("error, dc user id.\n");
+            return HVB_ERROR_INVALID_CERT_FORMAT;
+        }
+        sign_info->user_id.addr = cur_header;
+        sign_info->user_id.size = sign_info->user_id_len;
+    }
+
     return HVB_OK;
 }
 
@@ -378,9 +448,8 @@ static uint64_t hvb_buftouint64(uint8_t *p)
     uint32_t i;
     uint64_t val = 0;
 
-    for (i = 0; i < 8; i++, p++) {
-        val |= (((uint64_t)(*p)) << (i * 8));
-    }
+    for (i = 0; i < 8; i++, p++)
+        val |= ((uint64_t)(*p)) << (i * 8);
 
     return val;
 }
@@ -388,7 +457,7 @@ static uint64_t hvb_buftouint64(uint8_t *p)
 /*
  * raw_pubk: |bit_length|n0|mod|p_rr|
  */
-static enum hvb_errno hvb_cert_pubk_parser(struct hvb_rsa_pubkey *pubk, struct hvb_buf *raw_pubk)
+static enum hvb_errno hvb_cert_pubk_parser_rsa(struct hvb_rsa_pubkey *pubk, struct hvb_buf *raw_pubk)
 {
     uint64_t bit_length = 0;
     uint64_t n0 = 0;
@@ -434,22 +503,36 @@ static enum hvb_errno hvb_cert_pubk_parser(struct hvb_rsa_pubkey *pubk, struct h
     return 0;
 }
 
-static enum hvb_errno hvb_verify_cert(struct hvb_buf *tbs, struct hvb_sign_info *sign_info, uint32_t salt_size)
+static enum hvb_errno hvb_cert_pubk_parser_sm(struct sm2_pubkey *pubk, struct hvb_buf *raw_pubk)
 {
-    int cry_err;
-    enum hvb_errno ret = HVB_OK;
+    if (pubk == NULL || raw_pubk == NULL || raw_pubk->size != SM2_KEY_X_LEN + SM2_KEY_Y_LEN) {
+        hvb_print("arguments are invalid in hvb_cert_pubk_parser_sm\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (hvb_memcpy_s(&pubk->x[0], sizeof(pubk->x), raw_pubk->addr, SM2_KEY_X_LEN) != 0 ||
+        hvb_memcpy_s(&pubk->y[0], sizeof(pubk->y), raw_pubk->addr + SM2_KEY_X_LEN, SM2_KEY_Y_LEN) != 0) {
+        hvb_print("error, copy raw pubkey.\n");
+        return HVB_ERROR_OOM;
+    }
+
+    return HVB_OK;
+}
+
+static enum hvb_errno hvb_verify_cert_rsa(struct hvb_buf *tbs, struct hvb_sign_info *sign_info, uint32_t salt_size)
+{
+    int ret = HVB_OK;
     uint32_t hash_len;
     struct hvb_buf temp_buf;
     uint8_t *hash = NULL;
     struct hvb_rsa_pubkey pubk;
 
     temp_buf = sign_info->pubk;
-    ret = hvb_cert_pubk_parser(&pubk, &temp_buf);
+    ret = hvb_cert_pubk_parser_rsa(&pubk, &temp_buf);
     if (ret != HVB_OK) {
         hvb_print("error, hvb cert pubk parser.\n");
         return ret;
     }
-
     hash_len = get_hash_size(sign_info->algorithm);
     hash = hvb_malloc(hash_len);
     if (!hash) {
@@ -457,19 +540,70 @@ static enum hvb_errno hvb_verify_cert(struct hvb_buf *tbs, struct hvb_sign_info 
         return HVB_ERROR_OOM;
     }
 
-    cry_err = hash_sha256_single(tbs->addr, tbs->size, hash, hash_len);
-    if (cry_err != 0) {
+    ret = hash_sha256_single(tbs->addr, tbs->size, hash, hash_len);
+    if (ret != HASH_OK) {
         hvb_print("Error computed hash.\n");
+        hvb_free(hash);
         return HVB_ERROR_INVALID_ARGUMENT;
     }
 
-    cry_err = hvb_rsa_verify_pss(&pubk, hash, hash_len, sign_info->sign.addr, sign_info->sign.size, salt_size);
-    if (cry_err != VERIFY_OK) {
+    ret = hvb_rsa_verify_pss(&pubk, hash, hash_len, sign_info->sign.addr, sign_info->sign.size, salt_size);
+    if (ret != VERIFY_OK) {
         hvb_print("hvb_rsa_verify_pss result error, signature mismatch\n");
+        hvb_free(hash);
+        return HVB_ERROR_VERIFY_SIGN;
+    }
+
+    hvb_free(hash);
+
+    return HVB_OK;
+}
+
+static enum hvb_errno hvb_verify_cert_sm(struct hvb_buf *tbs, struct hvb_sign_info *sign_info)
+{
+    int ret = HVB_OK;
+    struct hvb_buf temp_buf = {0};
+    struct hvb_buf user_id = {0};
+    struct sm2_pubkey pubk = {0};
+
+    if (tbs == NULL || sign_info == NULL) {
+        hvb_print("arguments are invalid in hvb_verify_cert_sm\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    temp_buf = sign_info->pubk;
+    ret = hvb_cert_pubk_parser_sm(&pubk, &temp_buf);
+    if (ret != HVB_OK) {
+        hvb_print("error, hvb cert pubk parser.\n");
+        return ret;
+    }
+
+    user_id = sign_info->user_id;
+
+    ret = hvb_sm2_verify(&pubk, user_id.addr, user_id.size, tbs->addr,
+                         tbs->size, sign_info->sign.addr, sign_info->sign.size);
+    if (ret != SM2_VERIFY_OK) {
+        hvb_print("hvb_sm2_verify result error, signature mismatch\n");
         return HVB_ERROR_VERIFY_SIGN;
     }
 
     return HVB_OK;
+}
+
+static enum hvb_errno hvb_verify_cert(struct hvb_buf *tbs, struct hvb_sign_info *sign_info, uint32_t salt_size)
+{
+    switch (sign_info->algorithm) {
+        case 0: // SHA256_RSA3072
+        case 1: // SHA256_RSA4096
+        case 2: // SHA256_RSA2048
+            return hvb_verify_cert_rsa(tbs, sign_info, salt_size);
+        case 3: // sm2_sm3
+            return hvb_verify_cert_sm(tbs, sign_info);
+        default: {
+            hvb_print("hvb_verify_cert error: invalid algorithm\n");
+            return HVB_ERROR_INVALID_ARGUMENT;
+        }
+    }
 }
 
 static enum hvb_errno _check_rollback_index(struct hvb_ops *ops, struct hvb_cert *cert, struct hvb_verified_data *vd)
@@ -517,10 +651,6 @@ enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_b
         hvb_print("error, check ops\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
-    if (hvb_strnlen(ptn, HVB_MAX_PARTITION_NAME_LEN) >= HVB_MAX_PARTITION_NAME_LEN) {
-        hvb_print("error, check partition name\n");
-        return HVB_ERROR_INVALID_ARGUMENT;
-    }
 
     struct hvb_cert cert = {0};
     struct hvb_buf tbs = {0};
@@ -534,6 +664,8 @@ enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_b
 
     tbs.addr = cert_buf->addr;
     tbs.size = sign_info->sign.addr - cert_buf->addr;
+    vd->algorithm = sign_info->algorithm;
+
     ret = hvb_verify_cert(&tbs, sign_info, cert.salt_size);
     if (ret != HVB_OK) {
         hvb_print("error, verify cert.\n");
@@ -553,7 +685,6 @@ enum hvb_errno cert_init_desc(struct hvb_ops *ops, const char *ptn, struct hvb_b
     }
 
     *out_pubk = sign_info->pubk;
-    vd->key_len = out_pubk->size;
 
     return ret;
 }

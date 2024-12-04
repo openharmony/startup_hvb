@@ -21,6 +21,9 @@
 #include "hvb_sysdeps.h"
 #include "hvb_crypto.h"
 
+#define RSA_KEYWORD "sha256"
+#define SM_KEYWORD "sm3"
+
 static int cmdline_append_option(struct hvb_verified_data *vd, const char *key, const char *value)
 {
     uint64_t option_len = 0;
@@ -153,8 +156,30 @@ enum hvb_errno hvb_creat_cmdline(struct hvb_ops *ops, struct hvb_verified_data *
         goto fail;
     }
 
-    if (!cmdline_append_option(vd, HVB_CMDLINE_HASH_ALG, "sha256") ||
-        !cmdline_append_uint64_base10(vd, HVB_CMDLINE_RVT_SIZE, rvt_size) ||
+    switch (vd->algorithm) {
+        case 0: // SHA256_RSA3072
+        case 1: // SHA256_RSA4096
+        case 2: { // SHA256_RSA2048
+            if (!cmdline_append_option(vd, HVB_CMDLINE_HASH_ALG, RSA_KEYWORD)) {
+                ret = HVB_ERROR_OOM;
+                goto fail;
+            }
+            break;
+        }
+        case 3: { // sm2_sm3
+            if (!cmdline_append_option(vd, HVB_CMDLINE_HASH_ALG, SM_KEYWORD)) {
+                ret = HVB_ERROR_OOM;
+                goto fail;
+            }
+            break;
+        }
+        default: {
+            hvb_print("hvb_creat_cmdline error: invalid algorithm\n");
+            return HVB_ERROR_INVALID_ARGUMENT;
+        }
+    }
+
+    if (!cmdline_append_uint64_base10(vd, HVB_CMDLINE_RVT_SIZE, rvt_size) ||
         !cmdline_append_hex(vd, HVB_CMDLINE_CERT_DIGEST, rvt_digest, HVB_SHA256_DIGEST_BYTES)) {
         ret = HVB_ERROR_OOM;
         goto fail;

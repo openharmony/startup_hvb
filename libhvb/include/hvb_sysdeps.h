@@ -34,6 +34,7 @@ int hvb_memcpy_s(void *dest, size_t destMax, const void *src, size_t count);
 void *hvb_memset(void *dest, const int c, size_t n);
 int hvb_memset_s(void *dest, size_t destMax, int c, size_t count);
 void hvb_print(const char *message);
+void hvb_print_u64(uint64_t num);
 void hvb_printv(const char *message, ...);
 void *hvb_malloc_(size_t size);
 void hvb_free(void *ptr);

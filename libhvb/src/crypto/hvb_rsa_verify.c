@@ -207,7 +207,7 @@ static int emsa_pss_verify_check_db(uint8_t *db, uint32_t db_len,
                                     uint32_t emlen, uint32_t digestlen,
                                     uint32_t saltlen)
 {
-    int i;
+    uint32_t i;
 
     for (i = 0; i < emlen - digestlen - saltlen - PSS_EM_PADDING_LEN; i++) {
         if (db[i] != PADDING_UNIT_ZERO) {
@@ -300,7 +300,7 @@ static int emsa_pss_verify(uint32_t saltlen, const uint8_t *pdigest,
 rsa_error:
     if (db != NULL)
         hvb_free(db);
-    if (m_tmp ！= NULL)
+    if (m_tmp != NULL)
         hvb_free(m_tmp);
     return ret;
 }
@@ -343,26 +343,23 @@ static int hvb_rsa_verify_pss_param_convert(const struct hvb_rsa_pubkey *pkey, u
                                             uint32_t signlen, struct long_int_num *p_n,
                                             struct long_int_num *p_rr, struct long_int_num *p_m)
 {
+    if (!p_n)
+        return PUBKEY_EMPTY_ERROR;
     invert_copy((uint8_t *)p_n->p_uint, pkey->pn, pkey->nlen);
     p_n->valid_word_len = byte2dword(pkey->nlen);
     lin_update_valid_len(p_n);
-    if (!p_n) {
-        return PUBKEY_EMPTY_ERROR;
-    }
 
+    if (!p_m)
+        return SIGN_EMPTY_ERROR;
     invert_copy((uint8_t *)p_m->p_uint, psign, signlen);
     p_m->valid_word_len = byte2dword(pkey->nlen);
     lin_update_valid_len(p_m);
-    if (!p_m) {
-        return SIGN_EMPTY_ERROR;
-    }
 
+    if (!p_rr)
+        return PUBKEY_EMPTY_ERROR;
     invert_copy((uint8_t *)p_rr->p_uint, pkey->p_rr, pkey->rlen);
     p_rr->valid_word_len = byte2dword(pkey->nlen);
     lin_update_valid_len(p_rr);
-    if (!p_rr) {
-        return PUBKEY_EMPTY_ERROR;
-    }
 
     return VERIFY_OK;
 }
@@ -414,7 +411,6 @@ int hvb_rsa_verify_pss(const struct hvb_rsa_pubkey
         ret = MOD_EXP_CALC_FAIL;
         goto rsa_error;
     }
-
     lin_update_valid_len(em);
     em_data = hvb_malloc(klen);
     if (!em_data) {

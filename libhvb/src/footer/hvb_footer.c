@@ -128,10 +128,6 @@ enum hvb_errno footer_init_desc(struct hvb_ops *ops, const char *ptn, const char
         hvb_print("error, check ops\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
-    if (hvb_strnlen(ptn, HVB_MAX_PARTITION_NAME_LEN) >= HVB_MAX_PARTITION_NAME_LEN) {
-        hvb_print("error, check partition name\n");
-        return HVB_ERROR_INVALID_ARGUMENT;
-    }
 
     ret = _load_and_parse_footer(ops, &footer, ptn);
     if (ret != HVB_OK)
