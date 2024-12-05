@@ -142,7 +142,8 @@ int sm2_digest_verify(const struct sm2_pubkey *pkey, const uint8_t *pdigest, uin
 
     if (hvb_check(digestlen != SM3_OUT_BYTE_SIZE || signlen != SM2_POINT_LEN)) {
         return SM2_PARAM_LEN_ERROR;
-    }  
+    }
+
     invert_copy_byte((uint8_t *)digest_tmp, (uint8_t *)pdigest, digestlen);
     invert_copy_byte((uint8_t *)r, (uint8_t *)psign, SM2_KEY_LEN);
     invert_copy_byte((uint8_t *)s, (uint8_t *)psign + SM2_KEY_LEN, SM2_KEY_LEN);
