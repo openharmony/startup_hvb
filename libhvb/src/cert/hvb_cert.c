@@ -104,7 +104,7 @@ static enum hvb_errno hvb_compare_hash_rsa(struct hvb_buf *digest_buf, struct hv
     return HVB_OK;
 }
 
-static enum hvb_errno hvb_compare_hash_sm(struct hvb_buf *digest_buf, struct hvb_buf *msg_buf, uint32_t hash_algo)
+static enum hvb_errno hvb_compare_hash_sm(struct hvb_buf *digest_buf, struct hvb_buf *msg_buf)
 {
     int hash_err;
     uint8_t computed_hash[HVB_HASH_MAX_BYTES] = {0};
@@ -143,7 +143,7 @@ static enum hvb_errno hvb_compare_hash(struct hvb_buf *digest_buf, struct hvb_bu
         case 2: // SHA256_RSA2048
             return hvb_compare_hash_rsa(digest_buf, msg_buf, salt_buf, hash_algo);
         case 3: // sm2_sm3
-            return hvb_compare_hash_sm(digest_buf, msg_buf, hash_algo);
+            return hvb_compare_hash_sm(digest_buf, msg_buf);
         default: {
             hvb_print("invalid algorithm\n");
             return HVB_ERROR_INVALID_ARGUMENT;

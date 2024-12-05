@@ -17,6 +17,7 @@
 #include "hvb_util.h"
 #include <stdio.h>
 
+#ifdef HVB_CRYPTO_DEBUG
 uint32_t hvb_check_log(uint32_t matched, const char *pfunc, uint32_t line)
 {
     if (matched) {
@@ -25,3 +26,4 @@ uint32_t hvb_check_log(uint32_t matched, const char *pfunc, uint32_t line)
     }
     return matched;
 }
+#endif
