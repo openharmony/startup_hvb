@@ -61,27 +61,27 @@ const struct sm2_point_jcb g_pointg = {
  * r = a + b + c, the param 'carry' means carry of sum
  * note that c and r can't be the same
  */
-#define add_with_carry(a, b, c, r, carry)    \
-    do {                                     \
-        uint64_t tmp_res = (a) + (c);        \
-        carry = (tmp_res < (a)) ? 1 : 0;     \
-        tmp_res += (b);                      \
-        carry += ((tmp_res) < (b)) ? 1 : 0;  \
-        (r) = tmp_res;                       \
-    } while (0)
+static void add_with_carry(uint64_t a, uint64_t b, uint64_t c, uint64_t *r, uint64_t *carry)
+{
+    uint64_t tmp_res = a + c;
+    *carry = tmp_res >= a ? 0 : 1;
+    tmp_res += b;
+    *carry += tmp_res >= b ? 0 : 1;
+    *r = tmp_res;
+}
 
 /*
  * r = a - b - c, the param 'borrow' means borrow of sub
  * note that c and r can't be the same
  */
-#define sub_with_borrow(a, b, c, r, borrow)          \
-    do {                                             \
-        uint64_t tmp_borrow = ((a) < (b)) ? 1 : 0;   \
-        (r) = (a) - (b);                             \
-        tmp_borrow += ((r) < (c)) ? 1 : 0;           \
-        (r) -= (c);                                  \
-        borrow = tmp_borrow;                         \
-    } while (0)
+static void sub_with_borrow(uint64_t a, uint64_t b, uint64_t c, uint64_t *r, uint64_t *borrow)
+{
+    uint64_t tmp_borrow = a >= b ? 0 : 1;
+    *r = a - b;
+    tmp_borrow += *r >= c ? 0 : 1;
+    *r -= c;
+    *borrow = tmp_borrow;
+}
 
 /* a = a >> 1 */
 #define shift_right_one_bit(a)                \
@@ -97,7 +97,7 @@ const struct sm2_point_jcb g_pointg = {
     do {                                                       \
         uint64_t carry = 0;                                    \
         for (uint32_t i = 0; i < SM2_DATA_DWORD_SIZE; i++) {   \
-            add_with_carry(a[i], g_p[i], carry, a[i], carry);  \
+            add_with_carry(a[i], g_p[i], carry, &(a[i]), &(carry));  \
         }                                                      \
         (a[0] = (a[0] >> 1) + (a[1] << 63));                     \
         (a[1] = (a[1] >> 1) + (a[2] << 63));                     \
@@ -145,13 +145,13 @@ static void sm2_bn_add_mod_p(uint64_t a[], uint64_t b[], uint64_t r[])
     uint32_t i = 0;
 
     for (i = 0; i < SM2_DATA_DWORD_SIZE; i++) {
-        add_with_carry(a[i], b[i], carry, r[i], carry);
+        add_with_carry(a[i], b[i], carry, &r[i], &carry);
     }
 
     while (carry == 1) {
         carry = 0;
         for (i = 0; i < SM2_DATA_DWORD_SIZE; i++) {
-            add_with_carry(r[i], g_negative_p[i], carry, r[i], carry);
+            add_with_carry(r[i], g_negative_p[i], carry, &r[i], &carry);
         }
     }
 }
@@ -167,17 +167,17 @@ int sm2_bn_add_mod_n(uint64_t a[], uint64_t b[], uint64_t r[])
     int ret = -1;
 
     for (i = 0; i < SM2_DATA_DWORD_SIZE; i++) {
-        add_with_carry(a[i], b[i], carry, r[i], carry);
+        add_with_carry(a[i], b[i], carry, &r[i], &carry);
     }
 
     while (carry == 1) {
         carry = 0;
         for (i = 0; i < SM2_DATA_DWORD_SIZE; i++)
-            add_with_carry(r[i], g_negative_n[i], carry, r[i], carry);
+            add_with_carry(r[i], g_negative_n[i], carry, &r[i], &carry);
     }
 
     for (i = 0; i < SM2_DATA_DWORD_SIZE; i++)
-        sub_with_borrow(r[i], g_n[i], carry, r_tmp[i], carry);
+        sub_with_borrow(r[i], g_n[i], carry, &r_tmp[i], &carry);
 
     if (carry == 0) {
         ret = hvb_memcpy_s(r, SM2_KEY_LEN, r_tmp, sizeof(r_tmp));
@@ -198,13 +198,13 @@ static void sm2_bn_sub_mod_p(uint64_t a[], uint64_t b[], uint64_t r[])
     uint32_t i = 0;
 
     for (i = 0; i < SM2_DATA_DWORD_SIZE; i++) {
-        sub_with_borrow(a[i], b[i], borrow, r[i], borrow);
+        sub_with_borrow(a[i], b[i], borrow, &r[i], &borrow);
     }
 
     while (borrow == 1) {
         borrow = 0;
         for (i = 0; i < SM2_DATA_DWORD_SIZE; i++) {
-            sub_with_borrow(r[i], g_negative_p[i], borrow, r[i], borrow);
+            sub_with_borrow(r[i], g_negative_p[i], borrow, &r[i], &borrow);
         }
     }
 }
@@ -222,24 +222,24 @@ static void sm2_bn_mod_p(uint64_t a[], uint64_t r[])
      * 1. RDC with 64 bit
      * sum_add_to_a2 = a7 + a7 + a6
      */
-    add_with_carry(a[7], a[6], 0, sum_add_to_a2, carry);
+    add_with_carry(a[7], a[6], 0, &sum_add_to_a2, &carry);
     sum_add_to_a3 += carry;
-    add_with_carry(sum_add_to_a2, a[7], 0, sum_add_to_a2, carry);
+    add_with_carry(sum_add_to_a2, a[7], 0, &sum_add_to_a2, &carry);
     sum_add_to_a3 += carry;
 
     /* sum_add_to_a0 = sum_add_to_a2 + a4 + a5 */
-    add_with_carry(sum_add_to_a2, a[4], 0, sum_add_to_a0, carry);
+    add_with_carry(sum_add_to_a2, a[4], 0, &sum_add_to_a0, &carry);
     sum_add_to_a1 = sum_add_to_a3 + carry;
-    add_with_carry(sum_add_to_a0, a[5], 0, sum_add_to_a0, carry);
+    add_with_carry(sum_add_to_a0, a[5], 0, &sum_add_to_a0, &carry);
     sum_add_to_a1 += carry;
 
     /* add sum_add_to_ai to a[i] */
-    add_with_carry(a[0], sum_add_to_a0, 0, a[0], carry);
-    add_with_carry(a[1], sum_add_to_a1, carry, a[1], carry);
-    add_with_carry(a[2], sum_add_to_a2, carry, a[2], carry);
+    add_with_carry(a[0], sum_add_to_a0, 0, &a[0], &carry);
+    add_with_carry(a[1], sum_add_to_a1, carry, &a[1], &carry);
+    add_with_carry(a[2], sum_add_to_a2, carry, &a[2], &carry);
     /* sum_add_to_a3 =  a[7] */
-    add_with_carry(a[3], a[7], carry, a[3], carry);
-    add_with_carry(a[3], sum_add_to_a3, 0, a[3], sum_add_to_a0);
+    add_with_carry(a[3], a[7], carry, &a[3], &carry);
+    add_with_carry(a[3], sum_add_to_a3, 0, &a[3], &sum_add_to_a0);
     /* carry to next unit */
     carry += sum_add_to_a0;
 
@@ -289,38 +289,38 @@ static void sm2_bn_mod_p(uint64_t a[], uint64_t r[])
     /* 64bit add */
     uint64_t carry_tmp = 0;
 
-    add_with_carry(a[5], sum_add_to_a0, 0, a[5], carry_tmp); /* the first 64bit num */
-    add_with_carry(sum_tmp1, 0, carry_tmp, sum_tmp1, carry_tmp);
-    add_with_carry(a[4], sum_add_to_a2, carry_tmp, a[4], carry_tmp);
-    add_with_carry(a[7], sum_tmp2, carry_tmp, a[7], carry_tmp);
-    add_with_carry(carry, sum_add_to_a1, carry_tmp, carry, carry_tmp);
+    add_with_carry(a[5], sum_add_to_a0, 0, &a[5], &carry_tmp); /* the first 64bit num */
+    add_with_carry(sum_tmp1, 0, carry_tmp, &sum_tmp1, &carry_tmp);
+    add_with_carry(a[4], sum_add_to_a2, carry_tmp, &a[4], &carry_tmp);
+    add_with_carry(a[7], sum_tmp2, carry_tmp, &a[7], &carry_tmp);
+    add_with_carry(carry, sum_add_to_a1, carry_tmp, &carry, &carry_tmp);
 
-    add_with_carry(a[0], a[5], 0, r[0], carry_tmp);
-    add_with_carry(a[1], sum_tmp1, carry_tmp, r[1], carry_tmp);
-    add_with_carry(a[2], a[4], carry_tmp, r[2], carry_tmp);
-    add_with_carry(a[3], a[7], carry_tmp, r[3], carry_tmp);
-    add_with_carry(carry, 0, carry_tmp, carry, carry_tmp);
+    add_with_carry(a[0], a[5], 0, &r[0], &carry_tmp);
+    add_with_carry(a[1], sum_tmp1, carry_tmp, &r[1], &carry_tmp);
+    add_with_carry(a[2], a[4], carry_tmp, &r[2], &carry_tmp);
+    add_with_carry(a[3], a[7], carry_tmp, &r[3], &carry_tmp);
+    add_with_carry(carry, 0, carry_tmp, &carry, &carry_tmp);
 
-    sub_with_borrow(r[1], sum_tmp4, 0, r[1], carry_tmp); /* carry_tmp means borrow */
-    sub_with_borrow(r[2], 0, carry_tmp, r[2], carry_tmp);
-    sub_with_borrow(r[3], 0, carry_tmp, r[3], carry_tmp);
-    sub_with_borrow(carry, 0, carry_tmp, carry, carry_tmp);
+    sub_with_borrow(r[1], sum_tmp4, 0, &r[1], &carry_tmp); /* carry_tmp means borrow */
+    sub_with_borrow(r[2], 0, carry_tmp, &r[2], &carry_tmp);
+    sub_with_borrow(r[3], 0, carry_tmp, &r[3], &carry_tmp);
+    sub_with_borrow(carry, 0, carry_tmp, &carry, &carry_tmp);
 
     /* there may be carry, so still need to RDC */
     /* sub carry times p */
     sum_tmp1 = carry;
     sum_tmp2 = sum_tmp1 << 32;
     sum_tmp1 = sum_tmp2 - sum_tmp1;
-    add_with_carry(r[0], carry, 0, r[0], carry_tmp);
-    add_with_carry(r[1], sum_tmp1, carry_tmp, r[1], carry_tmp);
-    add_with_carry(r[2], 0, carry_tmp, r[2], carry_tmp);
-    add_with_carry(r[3], sum_tmp2, carry_tmp, r[3], carry_tmp);
+    add_with_carry(r[0], carry, 0, &r[0], &carry_tmp);
+    add_with_carry(r[1], sum_tmp1, carry_tmp, &r[1], &carry_tmp);
+    add_with_carry(r[2], 0, carry_tmp, &r[2], &carry_tmp);
+    add_with_carry(r[3], sum_tmp2, carry_tmp, &r[3], &carry_tmp);
 
     if (carry_tmp ==  1) {
-        add_with_carry(r[0], g_negative_p[0], 0, r[0], carry_tmp);
-        add_with_carry(r[1], g_negative_p[1], carry_tmp, r[1], carry_tmp);
-        add_with_carry(r[2], g_negative_p[2], carry_tmp, r[2], carry_tmp);
-        add_with_carry(r[3], g_negative_p[3], carry_tmp, r[3], carry_tmp);
+        add_with_carry(r[0], g_negative_p[0], 0, &r[0], &carry_tmp);
+        add_with_carry(r[1], g_negative_p[1], carry_tmp, &r[1], &carry_tmp);
+        add_with_carry(r[2], g_negative_p[2], carry_tmp, &r[2], &carry_tmp);
+        add_with_carry(r[3], g_negative_p[3], carry_tmp, &r[3], &carry_tmp);
     }
 }
 
@@ -372,86 +372,86 @@ static void sm2_bn_mul_mod_p(uint64_t a[], uint64_t b[], uint64_t r[])
     /* 2. cal a0 * b1, a1 * b0 */
     sm2_bn_word_mul(a[0], b[1], &bn_mul_res_low, &bn_mul_res_high);
     bn_mul_res[1] = bn_mul_res_low;
-    add_with_carry(bn_mul_res[1], mul_carry, 0, bn_mul_res[1], add_carry);
+    add_with_carry(bn_mul_res[1], mul_carry, 0, &bn_mul_res[1], &add_carry);
     mul_carry = bn_mul_res_high + add_carry;
 
     sm2_bn_word_mul(a[1], b[0], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[1], bn_mul_res_low, 0, bn_mul_res[1], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, carry_to_next_unit);
+    add_with_carry(bn_mul_res[1], bn_mul_res_low, 0, &bn_mul_res[1], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &carry_to_next_unit);
 
     /* 3. cal a0 * b2, a1 * b1, a2 * b0 */
     sm2_bn_word_mul(a[0], b[2], &bn_mul_res_low, &bn_mul_res_high);
     bn_mul_res[2] = bn_mul_res_low;
-    add_with_carry(bn_mul_res[2], mul_carry, 0, bn_mul_res[2], add_carry);
-    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[2], mul_carry, 0, &bn_mul_res[2], &add_carry);
+    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit = add_carry;
 
     sm2_bn_word_mul(a[1], b[1], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[2], bn_mul_res_low, 0, bn_mul_res[2], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[2], bn_mul_res_low, 0, &bn_mul_res[2], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     sm2_bn_word_mul(a[2], b[0], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[2], bn_mul_res_low, 0, bn_mul_res[2], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[2], bn_mul_res_low, 0, &bn_mul_res[2], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     /* 4. cal a0 * b3, a1 * b2, a2 * b1, a3 * b0 */
     sm2_bn_word_mul(a[0], b[3], &bn_mul_res_low, &bn_mul_res_high);
     bn_mul_res[3] = bn_mul_res_low;
-    add_with_carry(bn_mul_res[3], mul_carry, 0, bn_mul_res[3], add_carry);
-    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[3], mul_carry, 0, &bn_mul_res[3], &add_carry);
+    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit = add_carry;
 
     sm2_bn_word_mul(a[1], b[2], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[3], bn_mul_res_low, 0, bn_mul_res[3], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[3], bn_mul_res_low, 0, &bn_mul_res[3], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     sm2_bn_word_mul(a[2], b[1], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[3], bn_mul_res_low, 0, bn_mul_res[3], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[3], bn_mul_res_low, 0, &bn_mul_res[3], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     sm2_bn_word_mul(a[3], b[0], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[3], bn_mul_res_low, 0, bn_mul_res[3], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[3], bn_mul_res_low, 0, &bn_mul_res[3], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     /* 5. cal a1 * b3, a2 * b2, a3 * b1 */
     sm2_bn_word_mul(a[1], b[3], &bn_mul_res_low, &bn_mul_res_high);
     bn_mul_res[4] = bn_mul_res_low;
-    add_with_carry(bn_mul_res[4], mul_carry, 0, bn_mul_res[4], add_carry);
-    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[4], mul_carry, 0, &bn_mul_res[4], &add_carry);
+    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit = add_carry;
 
     sm2_bn_word_mul(a[2], b[2], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[4], bn_mul_res_low, 0, bn_mul_res[4], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[4], bn_mul_res_low, 0, &bn_mul_res[4], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     sm2_bn_word_mul(a[3], b[1], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[4], bn_mul_res_low, 0, bn_mul_res[4], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[4], bn_mul_res_low, 0, &bn_mul_res[4], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     /* 6. cal a2 * b3, a3 * b2 */
     sm2_bn_word_mul(a[2], b[3], &bn_mul_res_low, &bn_mul_res_high);
     bn_mul_res[5] = bn_mul_res_low;
-    add_with_carry(bn_mul_res[5], mul_carry, 0, bn_mul_res[5], add_carry);
-    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[5], mul_carry, 0, &bn_mul_res[5], &add_carry);
+    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit = add_carry;
 
     sm2_bn_word_mul(a[3], b[2], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_mul_res[5], bn_mul_res_low, 0, bn_mul_res[5], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_mul_res[5], bn_mul_res_low, 0, &bn_mul_res[5], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     /* 7. cal a3 * a3 */
     sm2_bn_word_mul(a[3], b[3], &bn_mul_res_low, &bn_mul_res_high);
     bn_mul_res[6] = bn_mul_res_low;
-    add_with_carry(bn_mul_res[6], mul_carry, 0, bn_mul_res[6], add_carry);
-    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, bn_mul_res[7], add_carry);
+    add_with_carry(bn_mul_res[6], mul_carry, 0, &bn_mul_res[6], &add_carry);
+    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, &bn_mul_res[7], &add_carry);
 
     sm2_bn_mod_p(bn_mul_res, r);
 }
@@ -474,40 +474,40 @@ static void sm2_bn_square_mod_p(uint64_t a[], uint64_t r[])
     /* cal a0 * a2 */
     sm2_bn_word_mul(a[0], a[2], &bn_mul_res_low, &bn_mul_res_high);
     bn_square_res[2] = bn_mul_res_low;
-    add_with_carry(bn_square_res[2], mul_carry, 0, bn_square_res[2], add_carry);
-    add_with_carry(bn_mul_res_high, 0, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_square_res[2], mul_carry, 0, &bn_square_res[2], &add_carry);
+    add_with_carry(bn_mul_res_high, 0, add_carry, &mul_carry, &add_carry);
 
     /* cal a0 *a3, a1 * a2 */
     sm2_bn_word_mul(a[0], a[3], &bn_mul_res_low, &bn_mul_res_high);
     bn_square_res[3] = bn_mul_res_low;
-    add_with_carry(bn_square_res[3], mul_carry, 0, bn_square_res[3], add_carry);
-    add_with_carry(bn_mul_res_high, 0, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_square_res[3], mul_carry, 0, &bn_square_res[3], &add_carry);
+    add_with_carry(bn_mul_res_high, 0, add_carry, &mul_carry, &add_carry);
 
     sm2_bn_word_mul(a[1], a[2], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_square_res[3], bn_mul_res_low, 0, bn_square_res[3], add_carry);
-    add_with_carry(mul_carry, bn_mul_res_high, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_square_res[3], bn_mul_res_low, 0, &bn_square_res[3], &add_carry);
+    add_with_carry(mul_carry, bn_mul_res_high, add_carry, &mul_carry, &add_carry);
     carry_to_next_unit += add_carry;
 
     /* cal a1 * a3 */
     sm2_bn_word_mul(a[1], a[3], &bn_mul_res_low, &bn_mul_res_high);
     bn_square_res[4] = bn_mul_res_low;
-    add_with_carry(bn_square_res[4], mul_carry, 0, bn_square_res[4], add_carry);
-    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, mul_carry, add_carry);
+    add_with_carry(bn_square_res[4], mul_carry, 0, &bn_square_res[4], &add_carry);
+    add_with_carry(bn_mul_res_high, carry_to_next_unit, add_carry, &mul_carry, &add_carry);
 
     /* cal a2 * a3 */
     sm2_bn_word_mul(a[2], a[3], &bn_mul_res_low, &bn_mul_res_high);
     bn_square_res[5] = bn_mul_res_low;
-    add_with_carry(bn_square_res[5], mul_carry, 0, bn_square_res[5], add_carry);
-    add_with_carry(bn_mul_res_high, 0, add_carry, bn_square_res[6], bn_square_res[7]);
+    add_with_carry(bn_square_res[5], mul_carry, 0, &bn_square_res[5], &add_carry);
+    add_with_carry(bn_mul_res_high, 0, add_carry, &bn_square_res[6], &bn_square_res[7]);
 
     /* cal 2 * bn_square_res */
-    add_with_carry(bn_square_res[1], bn_square_res[1], 0, bn_square_res[1], add_carry);
-    add_with_carry(bn_square_res[2], bn_square_res[2], add_carry, bn_square_res[2], add_carry);
-    add_with_carry(bn_square_res[3], bn_square_res[3], add_carry, bn_square_res[3], add_carry);
-    add_with_carry(bn_square_res[4], bn_square_res[4], add_carry, bn_square_res[4], add_carry);
-    add_with_carry(bn_square_res[5], bn_square_res[5], add_carry, bn_square_res[5], add_carry);
-    add_with_carry(bn_square_res[6], bn_square_res[6], add_carry, bn_square_res[6], add_carry);
-    add_with_carry(bn_square_res[7], bn_square_res[7], add_carry, bn_square_res[7], add_carry);
+    add_with_carry(bn_square_res[1], bn_square_res[1], 0, &bn_square_res[1], &add_carry);
+    add_with_carry(bn_square_res[2], bn_square_res[2], add_carry, &bn_square_res[2], &add_carry);
+    add_with_carry(bn_square_res[3], bn_square_res[3], add_carry, &bn_square_res[3], &add_carry);
+    add_with_carry(bn_square_res[4], bn_square_res[4], add_carry, &bn_square_res[4], &add_carry);
+    add_with_carry(bn_square_res[5], bn_square_res[5], add_carry, &bn_square_res[5], &add_carry);
+    add_with_carry(bn_square_res[6], bn_square_res[6], add_carry, &bn_square_res[6], &add_carry);
+    add_with_carry(bn_square_res[7], bn_square_res[7], add_carry, &bn_square_res[7], &add_carry);
 
     /* cal ai ^ 2 */
     sm2_bn_word_mul(a[0], a[0], &bn_mul_res_low, &bn_mul_res_high);
@@ -519,17 +519,17 @@ static void sm2_bn_square_mod_p(uint64_t a[], uint64_t r[])
     r[1] = bn_mul_res_high;
 
     sm2_bn_word_mul(a[2], a[2], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_square_res[1], mul_carry, 0, bn_square_res[1], add_carry);
-    add_with_carry(bn_square_res[2], r[0], add_carry, bn_square_res[2], add_carry);
-    add_with_carry(bn_square_res[3], r[1], add_carry, bn_square_res[3], add_carry);
-    add_with_carry(bn_square_res[4], bn_mul_res_low, add_carry, bn_square_res[4], add_carry);
-    add_with_carry(bn_square_res[5], bn_mul_res_high, add_carry, bn_square_res[5], add_carry);
-    add_with_carry(bn_square_res[6], 0, add_carry, bn_square_res[6], add_carry);
-    add_with_carry(bn_square_res[7], 0, add_carry, bn_square_res[7], add_carry);
+    add_with_carry(bn_square_res[1], mul_carry, 0, &bn_square_res[1], &add_carry);
+    add_with_carry(bn_square_res[2], r[0], add_carry, &bn_square_res[2], &add_carry);
+    add_with_carry(bn_square_res[3], r[1], add_carry, &bn_square_res[3], &add_carry);
+    add_with_carry(bn_square_res[4], bn_mul_res_low, add_carry, &bn_square_res[4], &add_carry);
+    add_with_carry(bn_square_res[5], bn_mul_res_high, add_carry, &bn_square_res[5], &add_carry);
+    add_with_carry(bn_square_res[6], 0, add_carry, &bn_square_res[6], &add_carry);
+    add_with_carry(bn_square_res[7], 0, add_carry, &bn_square_res[7], &add_carry);
 
     sm2_bn_word_mul(a[3], a[3], &bn_mul_res_low, &bn_mul_res_high);
-    add_with_carry(bn_square_res[6], bn_mul_res_low, 0, bn_square_res[6], add_carry);
-    add_with_carry(bn_square_res[7], bn_mul_res_high, add_carry, bn_square_res[7], add_carry);
+    add_with_carry(bn_square_res[6], bn_mul_res_low, 0, &bn_square_res[6], &add_carry);
+    add_with_carry(bn_square_res[7], bn_mul_res_high, add_carry, &bn_square_res[7], &add_carry);
 
     sm2_bn_mod_p(bn_square_res, r);
 }
@@ -555,7 +555,7 @@ int sm2_bn_cmp(uint64_t a[], uint64_t b[])
     uint64_t r[SM2_DATA_DWORD_SIZE] = { 0 };
 
     for (uint32_t i = 0; i < SM2_DATA_DWORD_SIZE; i++) {
-        sub_with_borrow(a[i], b[i], borrow, r[i], borrow);
+        sub_with_borrow(a[i], b[i], borrow, &r[i], &borrow);
     }
 
     if (borrow == 1)
