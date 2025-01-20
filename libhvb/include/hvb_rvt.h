@@ -25,13 +25,14 @@ extern "C" {
 /* Magic for the rvt image header. */
 #define RVT_MAGIC                    "rot"
 #define RVT_MAGIC_LEN                4
-#define RVT_RELEASE_SIZE             64
+#define RVT_RELEASE_SIZE             60
 #define MAX_NUMBER_OF_RVT_IMAGES     32
 #define MAX_PUBKEY_LEN               1040
 #define PUBKEY_LEN_4096              1040
 #define PUBKEY_LEN_2048              528
 #define PUBKEY_LEN_SM                64
 #define PARTITION_NAME_LEN           64
+#define RVT_MAX_VALID_KEY_NUM        2
 
 /* Maximum size of a rvt image - 64 KiB. */
 #define RVT_MAX_SIZE                 (64 * 1024)
@@ -46,9 +47,12 @@ struct rvt_pubk_desc {
     /* Length of the public key. */
     uint64_t pubkey_len;
 
-    /* pubkey_payload. */
-    uint8_t pubkey_payload[MAX_PUBKEY_LEN];
-} HVB_ATTR_PACKED;
+    /* pubkey payload stored dynamically */
+    struct hvb_buf pubkey_payload;
+
+    /* second pubkey payload when pubkey_num_per_ptn is 2 */
+    struct hvb_buf pubkey_payload_backup;
+};
 
 struct rvt_image_header {
     /* Four bytes equal to "rot" (magic). */
@@ -57,14 +61,17 @@ struct rvt_image_header {
     /* The verity_num. */
     uint32_t verity_num;
 
+    /* pubkey num for each ptn, can be 1 or 2 and 0 as old version. */
+    uint32_t pubkey_num_per_ptn;
+
     /* The reserved data, must be 0. */
     uint8_t rvt_reserved[RVT_RELEASE_SIZE];
 } HVB_ATTR_PACKED;
 
-enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *dest, uint64_t desc_size);
+enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *header);
 enum hvb_errno hvb_rvt_get_pubk_desc(const struct hvb_buf *rvt, struct hvb_buf *pubk_desc);
-enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_pubk_desc *desc, uint64_t desc_size);
-enum hvb_errno hvb_rvt_get_pubk_buf(struct hvb_buf *key_buf, const struct hvb_buf *rvt, struct rvt_pubk_desc *desc);
+enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_pubk_desc *desc);
+enum hvb_errno hvb_rvt_get_pubk_buf(struct hvb_buf *key_buf, const struct hvb_buf *rvt, uint32_t pubkey_offset, uint32_t pubkey_len);
 enum hvb_errno hvb_calculate_certs_digest(struct hvb_verified_data *vd, uint8_t *out_digest);
 
 #ifdef __cplusplus
