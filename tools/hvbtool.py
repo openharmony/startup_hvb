@@ -43,6 +43,7 @@ _params = {
     'hash_algo':                 'SHA256',         \
     'block_size':                4096,             \
     'fec_num_roots':             0,                \
+    'pubkey_num_per_ptn':        1,                \
     'padding_size':              None,             \
     'chain_partition':           [],               \
     'signing_helper_with_files': None,             \
@@ -986,6 +987,7 @@ class HvbTool(object):
 
     MAX_RVT_SIZE = 64 * 1024
     MAX_FOOTER_SIZE = 4096
+    RVT_RESERVED = 60
 
 
     def __init__(self):
@@ -1000,6 +1002,7 @@ class HvbTool(object):
         self.block_size = _params['block_size']
         self.padding_size = _params['padding_size']
         self.signing_helper_with_files = _params['signing_helper_with_files']
+        self.pubkey_num_per_ptn = int(_params['pubkey_num_per_ptn'])
         self.calc_max_image_size = _params['calc_max_image_size'].lower()
         self.signed_img = _params['output']
         self.hash_algo = ALGORITHMS[self.algo].hash_algo
@@ -1259,29 +1262,51 @@ class HvbTool(object):
         rvtcontent = b''
         rvtcontent += self.RVT_MAGIC
         verity_num = len(_params['chain_partition'])
-        rvtcontent += struct.pack('I', verity_num) + b'\0' * 64    # rvt_reversed: 64 bytes
+        if self.pubkey_num_per_ptn != 1 and self.pubkey_num_per_ptn != 2:
+            print("invalid pubkey_num_per_ptn: %d" % (self.pubkey_num_per_ptn))
+            sys.exit(1)
+        if verity_num % self.pubkey_num_per_ptn != 0:
+            print("verity_num doesnt match pubkey_num_per_ptn: %d" % (self.pubkey_num_per_ptn))
+            sys.exit(1)
+        rvtcontent += struct.pack('I', verity_num // self.pubkey_num_per_ptn)
+        rvtcontent += struct.pack('I', self.pubkey_num_per_ptn) + b'\0' * self.RVT_RESERVED # rvt_reversed: 60 bytes
         cur_sizes = len(rvtcontent)
 
-        for item in _params['chain_partition']:
-            chain_partition_data = item.split(':')
+        for index in range(0, verity_num, self.pubkey_num_per_ptn):
+            chain_partition_data = _params['chain_partition'][index].split(':')
             partition_name = chain_partition_data[0].strip()
             pubkey = chain_partition_data[1].strip()
+            if self.pubkey_num_per_ptn == 2:
+                chain_partition_data_backup = _params['chain_partition'][index + 1].split(':')
+                partition_name_backup = chain_partition_data_backup[0].strip()
+                if partition_name != partition_name_backup:
+                    print("partition name doesnt match for pubkey_num_per_ptn: %d" % (self.pubkey_num_per_ptn))
+                    sys.exit(1)
+                pubkey_backup = chain_partition_data_backup[1].strip()
 
             try:
                 if self.algo == 'SM2':
                     key = SMPublicKey(pubkey)
+                    if self.pubkey_num_per_ptn == 2:
+                        key_backup = SMPublicKey(pubkey_backup)
                 else:
                     key = RSAPublicKey(pubkey)
+                    if self.pubkey_num_per_ptn == 2:
+                        key_backup = RSAPublicKey(pubkey_backup)
             except HvbError as err:
                 sys.exit(1)
             pubkey_payload = key.get_public_key()
+            if self.pubkey_num_per_ptn == 2:
+                pubkey_payload_backup = key_backup.get_public_key()
             pubkey_len = len(pubkey_payload)
             pubkey_offset = cur_sizes + 80
             rvtcontent += partition_name.encode() + b'\0' * (64 - len(partition_name))    # partition_name
             rvtcontent += struct.pack('Q', pubkey_offset) # pubkey_offset
             rvtcontent += struct.pack('Q', pubkey_len)    # pubkey_len
             rvtcontent += pubkey_payload  # pubkey_payload
-            cur_sizes += 80 + pubkey_len
+            if self.pubkey_num_per_ptn == 2:
+                rvtcontent += pubkey_payload_backup  # pubkey_payload_backup
+            cur_sizes += 80 + pubkey_len * self.pubkey_num_per_ptn
 
         flags = os.O_WRONLY | os.O_RDONLY | os.O_CREAT
         modes = stat.S_IWUSR | stat.S_IRUSR
@@ -1330,22 +1355,30 @@ class HvbTool(object):
     def parse_rvt_image(self, handle):
         handle.seek(0)
 
-        header = handle.read(8)
-        magic, verity_num = struct.unpack('4sI', header)
+        header = handle.read(12)
+        magic, verity_num, pubkey_num_per_ptn = struct.unpack('4sII', header)
 
         msg = ["[rvt info]: \n"]
         if magic != self.RVT_MAGIC:
             raise HvbError("It is not a valid rvt image.")
+
+        if pubkey_num_per_ptn == 0:
+            pubkey_num_per_ptn = 1
+            msg.append("\tuse old version pubkey_num_per_ptn\n")
+        msg.append("\tpubkey_num_per_ptn:          {}\n".format(pubkey_num_per_ptn))
 
         handle.seek(72)
         for i in range(verity_num):
             # The size of pubkey_des excludes pubkey_payload is 80 bytes
             data = handle.read(80)
             name, pubkey_offset, pubkey_len = struct.unpack('64s2Q', data)
-            msg.append('\tChain Partition descriptor: \n')
+            msg.append('\n\tChain Partition descriptor: \n')
             msg.append('\t\tPartition Name:      {}\n'.format(name.decode()))
             pubkey = handle.read(pubkey_len)
-            msg.append("\t\tPublic key (sha256):   {}\n\n".format(hashlib.sha256(pubkey).hexdigest()))
+            msg.append("\t\tPublic key:          {}\n".format(hashlib.sha256(pubkey).hexdigest()))
+            if pubkey_num_per_ptn == 2:
+                pubkey_backup = handle.read(pubkey_len)
+                msg.append("\t\tBackup Public key:   {}\n".format(hashlib.sha256(pubkey_backup).hexdigest()))
 
         print(''.join(msg))
 

@@ -125,9 +125,8 @@ static bool hvb_buf_equal(const struct hvb_buf *buf1, const struct hvb_buf *buf2
     return buf1->size == buf2->size && hvb_memcmp(buf1->addr, buf2->addr, buf1->size) == 0;
 }
 
-static uint64_t get_desc_size(uint32_t algo, uint64_t *desc_size)
+static enum hvb_errno get_desc_size(uint32_t algo, uint32_t pubkey_num_per_ptn, uint64_t *desc_size)
 {
-    *desc_size = sizeof(struct rvt_pubk_desc);
     uint64_t key_len = 0;
     switch (algo) {
         case 1: { // SHA256_RSA4096
@@ -144,57 +143,114 @@ static uint64_t get_desc_size(uint32_t algo, uint64_t *desc_size)
         }
         default: {
             hvb_print("hash algo dsnt support\n");
-            return -1;
+            return HVB_ERROR_INVALID_ARGUMENT;
         }
     }
 
-    /* desc size larger than MAX_PUBKEY_LEN */
-    *desc_size = sizeof(struct rvt_pubk_desc) - MAX_PUBKEY_LEN + key_len;
+    /* actual desc size is const part + pubkey payload part */
+    *desc_size = hvb_offsetof(struct rvt_pubk_desc, pubkey_payload) + key_len * pubkey_num_per_ptn;
 
-    return 0;
+    return HVB_OK;
+}
+
+static enum hvb_errno hvb_rvt_parser(const struct hvb_buf *rvt, const struct hvb_verified_data *vd,
+                                     struct rvt_image_header *header, struct hvb_buf *pubk_descs, uint64_t *desc_size)
+{
+    enum hvb_errno ret;
+    uint64_t rvt_real_size;
+    uint32_t pubkey_num_per_ptn;
+
+    ret = hvb_rvt_head_parser(rvt, header);
+    if (ret != HVB_OK) {
+        hvb_print("error, parse rvt header.\n");
+        return ret;
+    }
+
+    if (header->pubkey_num_per_ptn == 0) {
+        hvb_print("old version rvt, use default pubkey num.\n");
+        pubkey_num_per_ptn = 1;
+    } else {
+        pubkey_num_per_ptn = header->pubkey_num_per_ptn;
+    }
+
+    ret = get_desc_size(vd->algorithm, pubkey_num_per_ptn, desc_size);
+    if (ret != HVB_OK) {
+        hvb_print("error, get desc size.\n");
+        return ret;
+    }
+
+    rvt_real_size = sizeof(*header) + header->verity_num * (*desc_size);
+    if (rvt_real_size > rvt->size || rvt_real_size < sizeof(*header)) {
+        hvb_print("error, rvt_real_size is invalid.\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    ret = hvb_rvt_get_pubk_desc(rvt, pubk_descs);
+    if (ret != HVB_OK) {
+        hvb_print("error, pubk descs.\n");
+        return ret;
+    }
+
+    return HVB_OK;
+}
+
+static enum hvb_errno hvb_pubkey_parser(const struct hvb_buf *rvt, uint32_t pubkey_num_per_ptn,
+                                        struct rvt_pubk_desc *desc)
+{
+    enum hvb_errno ret;
+
+    ret = hvb_rvt_get_pubk_buf(&desc->pubkey_payload, rvt, desc->pubkey_offset, desc->pubkey_len);
+    if (ret != HVB_OK) {
+        hvb_print("errror, get main pubk buf\n");
+        return ret;
+    }
+
+    if (pubkey_num_per_ptn == RVT_MAX_VALID_KEY_NUM) {
+        ret = hvb_rvt_get_pubk_buf(&desc->pubkey_payload_backup, rvt,
+                                   desc->pubkey_offset + desc->pubkey_len, desc->pubkey_len);
+        if (ret != HVB_OK) {
+            hvb_print("errror, get backup pubk buf\n");
+            return ret;
+        }
+    }
+
+    return HVB_OK;
 }
 
 static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *const *ptn_list,
                                             struct hvb_buf *rvt, struct hvb_verified_data *vd)
 {
     enum hvb_errno ret = HVB_OK;
-    uint32_t i, nodes_num;
-    struct hvb_buf pubk_descs;
-    struct rvt_pubk_desc desc;
-    struct hvb_buf expected_pubk;
-    struct hvb_buf cert_pubk;
-    struct rvt_image_header header;
+    uint32_t i;
+    struct hvb_buf pubk_descs = {0};
+    struct rvt_pubk_desc desc = {0};
+    struct hvb_buf cert_pubk = {0};
+    struct rvt_image_header header = {0};
     uint64_t desc_size;
+    bool is_locked;
 
-    ret = get_desc_size(vd->algorithm, &desc_size);
-    if (ret < 0) {
-        hvb_print("error, get desc size.\n");
+    if (ops->read_lock_state(ops, &is_locked) != HVB_IO_OK) {
+        ret = HVB_ERROR_IO;
+        hvb_print("error, get lock state.\n");
         goto fail;
     }
 
-    ret = hvb_rvt_head_parser(rvt, &header, desc_size);
+    ret = hvb_rvt_parser(rvt, vd, &header, &pubk_descs, &desc_size);
     if (ret != HVB_OK) {
-        hvb_print("error, parse rvt header.\n");
+        hvb_print("error, parse rvt.\n");
         goto fail;
     }
 
-    nodes_num = header.verity_num;
-    ret = hvb_rvt_get_pubk_desc(rvt, &pubk_descs);
-    if (ret != HVB_OK) {
-        hvb_print("error, pubk descs.\n");
-        goto fail;
-    }
-
-    for (i = 0; i < nodes_num; i++) {
-        ret = hvb_rvt_pubk_desc_parser(&pubk_descs, &desc, desc_size);
+    for (i = 0; i < header.verity_num; i++) {
+        ret = hvb_rvt_pubk_desc_parser(&pubk_descs, &desc);
         if (ret != HVB_OK) {
-            hvb_print("errror, parser rvt k descs\n");
+            hvb_print("errror, parser rvt pubkey descs\n");
             goto fail;
         }
 
-        ret = hvb_rvt_get_pubk_buf(&expected_pubk, rvt, &desc);
+        ret = hvb_pubkey_parser(rvt, header.pubkey_num_per_ptn, &desc);
         if (ret != HVB_OK) {
-            hvb_print("errror, get pubk buf\n");
+            hvb_print("errror, parse pubkey\n");
             goto fail;
         }
 
@@ -204,10 +260,15 @@ static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *con
             goto fail;
         }
 
-        if (hvb_buf_equal(&expected_pubk, &cert_pubk) != true) {
-            ret = HVB_ERROR_PUBLIC_KEY_REJECTED;
-            hvb_printv("error, compare public key: ", desc.name, "\n", NULL);
-            goto fail;
+        if (hvb_buf_equal(&desc.pubkey_payload, &cert_pubk) != true) {
+            if (!is_locked && header.pubkey_num_per_ptn == RVT_MAX_VALID_KEY_NUM &&
+                hvb_buf_equal(&desc.pubkey_payload_backup, &cert_pubk)) {
+                hvb_printv(desc.name, "backup pubkey verified\n", NULL);
+            } else {
+                ret = HVB_ERROR_PUBLIC_KEY_REJECTED;
+                hvb_printv("error, compare public key: ", desc.name, "\n", NULL);
+                goto fail;
+            }
         }
 
         pubk_descs.addr += desc_size;

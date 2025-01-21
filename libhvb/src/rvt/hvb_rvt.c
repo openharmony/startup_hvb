@@ -98,10 +98,8 @@ enum hvb_errno hvb_calculate_certs_digest(struct hvb_verified_data *vd, uint8_t 
     }
 }
 
-enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *header, uint64_t desc_size)
+enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_header *header)
 {
-    uint64_t rvt_real_size;
-
     hvb_return_hvb_err_if_null(rvt);
     hvb_return_hvb_err_if_null(rvt->addr);
     hvb_return_hvb_err_if_null(header);
@@ -110,15 +108,21 @@ enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_h
         hvb_print("error, rvt->size is too small.\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
+
+    /* copy desc const part */
     if (hvb_memcpy_s(header, sizeof(*header), rvt->addr, sizeof(*header)) != 0) {
         hvb_print("error, copy rvt header.\n");
         return HVB_ERROR_OOM;
     }
 
-    rvt_real_size = sizeof(*header) + header->verity_num * desc_size;
-    if (rvt_real_size > rvt->size || rvt_real_size < sizeof(*header)) {
-        hvb_print("error, rvt_real_size is invalid.\n");
-        return HVB_ERROR_INVALID_ARGUMENT;
+    if (header->pubkey_num_per_ptn > RVT_MAX_VALID_KEY_NUM) {
+        hvb_print("error, invalid pubkey_num_per_ptn.\n");
+        return HVB_ERROR_OOM;
+    }
+
+    if (header->verity_num >= MAX_NUMBER_OF_RVT_IMAGES) {
+        hvb_print("error, verity_num.\n");
+        return HVB_ERROR_OOM;
     }
 
     return HVB_OK;
@@ -146,17 +150,18 @@ enum hvb_errno hvb_rvt_get_pubk_desc(const struct hvb_buf *rvt, struct hvb_buf *
     return HVB_OK;
 }
 
-enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_pubk_desc *desc, uint64_t desc_size)
+enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_pubk_desc *desc)
 {
+    size_t pubk_desc_const_size = hvb_offsetof(struct rvt_pubk_desc, pubkey_payload);
     hvb_return_hvb_err_if_null(pubk);
     hvb_return_hvb_err_if_null(pubk->addr);
     hvb_return_hvb_err_if_null(desc);
 
-    if (pubk->size < desc_size) {
+    if (pubk->size < pubk_desc_const_size) {
         hvb_print("error, pubk->size is too small.\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
-    if (hvb_memcpy_s(desc, sizeof(*desc), pubk->addr, desc_size) != 0) {
+    if (hvb_memcpy_s(desc, sizeof(*desc), pubk->addr, pubk_desc_const_size) != 0) {
         hvb_print("error, copy desc.\n");
         return HVB_ERROR_OOM;
     }
@@ -164,15 +169,15 @@ enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_p
     return HVB_OK;
 }
 
-enum hvb_errno hvb_rvt_get_pubk_buf(struct hvb_buf *key_buf, const struct hvb_buf *rvt, struct rvt_pubk_desc *desc)
+enum hvb_errno hvb_rvt_get_pubk_buf(struct hvb_buf *key_buf, const struct hvb_buf *rvt,
+                                    uint32_t pubkey_offset, uint32_t pubkey_len)
 {
     hvb_return_hvb_err_if_null(key_buf);
     hvb_return_hvb_err_if_null(rvt);
     hvb_return_hvb_err_if_null(rvt->addr);
-    hvb_return_hvb_err_if_null(desc);
 
-    key_buf->addr = rvt->addr + desc->pubkey_offset;
-    key_buf->size = desc->pubkey_len;
+    key_buf->addr = rvt->addr + pubkey_offset;
+    key_buf->size = pubkey_len;
 
     return HVB_OK;
 }
