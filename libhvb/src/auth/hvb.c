@@ -194,7 +194,8 @@ static enum hvb_errno hvb_rvt_parser(const struct hvb_buf *rvt, const struct hvb
     return HVB_OK;
 }
 
-static enum hvb_errno hvb_pubkey_parser(const struct hvb_buf *rvt, uint32_t pubkey_num_per_ptn, struct rvt_pubk_desc *desc)
+static enum hvb_errno hvb_pubkey_parser(const struct hvb_buf *rvt, uint32_t pubkey_num_per_ptn,
+                                        struct rvt_pubk_desc *desc)
 {
     enum hvb_errno ret;
 
@@ -205,7 +206,8 @@ static enum hvb_errno hvb_pubkey_parser(const struct hvb_buf *rvt, uint32_t pubk
     }
 
     if (pubkey_num_per_ptn == RVT_MAX_VALID_KEY_NUM) {
-        ret = hvb_rvt_get_pubk_buf(&desc->pubkey_payload_backup, rvt, desc->pubkey_offset + desc->pubkey_len, desc->pubkey_len);
+        ret = hvb_rvt_get_pubk_buf(&desc->pubkey_payload_backup, rvt,
+                                   desc->pubkey_offset + desc->pubkey_len, desc->pubkey_len);
         if (ret != HVB_OK) {
             hvb_print("errror, get backup pubk buf\n");
             return ret;

@@ -169,7 +169,8 @@ enum hvb_errno hvb_rvt_pubk_desc_parser(const struct hvb_buf *pubk, struct rvt_p
     return HVB_OK;
 }
 
-enum hvb_errno hvb_rvt_get_pubk_buf(struct hvb_buf *key_buf, const struct hvb_buf *rvt, uint32_t pubkey_offset, uint32_t pubkey_len)
+enum hvb_errno hvb_rvt_get_pubk_buf(struct hvb_buf *key_buf, const struct hvb_buf *rvt,
+                                    uint32_t pubkey_offset, uint32_t pubkey_len)
 {
     hvb_return_hvb_err_if_null(key_buf);
     hvb_return_hvb_err_if_null(rvt);
