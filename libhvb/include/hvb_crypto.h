@@ -50,7 +50,7 @@ struct hash_ctx_t {
     uint32_t alg_type;
 
     uint32_t buf_len;
-    uint32_t total_len;
+    uint64_t total_len;
 
     uint32_t iv[IV_BYTE_SIZE_SHA256];
 
