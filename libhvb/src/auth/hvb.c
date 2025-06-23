@@ -58,6 +58,7 @@ struct hvb_verified_data *hvb_init_verified_data(void)
     vd->cmdline.cur_pos = 0;
     vd->cmdline.max_size = CMD_LINE_SIZE;
     vd->algorithm = 0;
+    vd->match_backup_pubkey = 0;
 
     return vd;
 
@@ -264,6 +265,7 @@ static enum hvb_errno hvb_walk_verify_nodes(struct hvb_ops *ops, const char *con
             if (!is_locked && header.pubkey_num_per_ptn == RVT_MAX_VALID_KEY_NUM &&
                 hvb_buf_equal(&desc.pubkey_payload_backup, &cert_pubk)) {
                 hvb_printv(desc.name, "backup pubkey verified\n", NULL);
+                vd->match_backup_pubkey = 1;
             } else {
                 ret = HVB_ERROR_PUBLIC_KEY_REJECTED;
                 hvb_printv("error, compare public key: ", desc.name, "\n", NULL);

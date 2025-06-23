@@ -85,6 +85,7 @@ struct hvb_verified_data {
      * 3: SM
      */
     uint32_t algorithm;
+    uint32_t match_backup_pubkey;
 };
 
 struct hvb_verified_data *hvb_init_verified_data(void);
