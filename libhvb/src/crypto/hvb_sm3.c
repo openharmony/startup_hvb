@@ -288,7 +288,7 @@ int hvb_sm3_update(struct sm3_ctx_t *hash_ctx, const void *msg, uint32_t msg_len
     left_len = SM3_BLK_BYTE_SIZE - hash_ctx->buf_len;
 
     if (hash_ctx->buf_len != 0 && msg_len >= left_len) {
-        if (hvb_check(hvb_memcpy_s(hash_ctx->blk_buf + hash_ctx->buf_len, sizeof(hash_ctx->blk_buf) - sizeof(hash_ctx->buf_len),
+        if (hvb_check(hvb_memcpy_s(hash_ctx->blk_buf + hash_ctx->buf_len, sizeof(hash_ctx->blk_buf) - hash_ctx->buf_len,
                                    msg_tmp, left_len) != 0))
             return SM3_MEMORY_ERR;
         sm3_data_blk_update(hash_ctx->iv, hash_ctx->blk_buf, SM3_BLK_BYTE_SIZE);
@@ -305,7 +305,7 @@ int hvb_sm3_update(struct sm3_ctx_t *hash_ctx, const void *msg, uint32_t msg_len
     }
 
     if (msg_len != 0) {
-        if (hvb_check(hvb_memcpy_s(hash_ctx->blk_buf + hash_ctx->buf_len, sizeof(hash_ctx->blk_buf) - sizeof(hash_ctx->buf_len),
+        if (hvb_check(hvb_memcpy_s(hash_ctx->blk_buf + hash_ctx->buf_len, sizeof(hash_ctx->blk_buf) - hash_ctx->buf_len,
                                    msg_tmp, msg_len) != 0))
             return SM3_MEMORY_ERR;
         hash_ctx->buf_len += msg_len;
