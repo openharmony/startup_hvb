@@ -97,12 +97,12 @@ static void sub_with_borrow(uint64_t a, uint64_t b, uint64_t c, uint64_t *r, uin
     do {                                                       \
         uint64_t carry = 0;                                    \
         for (uint32_t i = 0; i < SM2_DATA_DWORD_SIZE; i++) {   \
-            add_with_carry((a[i]), (g_p[i]), (carry), (&(a[i])), (&(carry)));  \
+            add_with_carry(((a))[i], (g_p[i]), (carry), &(a[i]), &(carry));  \
         }                                                      \
-        (a[0] = ((a[0] >> 1) + (a[1] << 63)));                     \
-        (a[1] = ((a[1] >> 1) + (a[2] << 63)));                     \
-        (a[2] = ((a[2] >> 1) + (a[3] << 63)));                     \
-        (a[3] = ((a[3] >> 1) + (carry << 63)));                    \
+        (a[0] = (a[0] >> 1) + (a[1] << 63));                     \
+        (a[1] = (a[1] >> 1) + (a[2] << 63));                     \
+        (a[2] = (a[2] >> 1) + (a[3] << 63));                     \
+        (a[3] = (a[3] >> 1) + (carry << 63));                    \
     } while (0)
 
 void invert_copy_byte(uint8_t *dst, uint8_t *src, uint32_t len)
