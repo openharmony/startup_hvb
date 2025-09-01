@@ -160,7 +160,7 @@ void lin_update_valid_len(struct long_int_num *p_a)
     unsigned long *p_data = NULL;
     uint32_t i;
 
-    if (!p_a) {
+    if (!p_a || p_a->valid_word_len == 0) {
         return;
     }
 
