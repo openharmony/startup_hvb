@@ -318,7 +318,7 @@ struct long_int_num *montgomery_mod_exp(struct long_int_num *p_m, struct long_in
     struct long_int_num *p_mr = NULL;
     struct long_int_num *p_square = NULL;
     int i;
-    if ((exp & 1UL) == 0) {
+    if ((exp & 1UL) == 0 || exp < 5) {
         goto fail_final;
     }
 
