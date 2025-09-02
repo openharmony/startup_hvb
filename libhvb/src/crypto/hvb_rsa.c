@@ -40,6 +40,7 @@ enum {
 #define byte2bit(byte) ((byte) << 3)
 #define SWORD_BIT_SIZE (WORD_BIT_SIZE / 2)
 #define SWORD_BIT_MASK ((1UL << SWORD_BIT_SIZE) - 1)
+#define SMALLEST_EXP 5
 
 static void lin_clear(struct long_int_num *p_a)
 {
@@ -160,7 +161,7 @@ void lin_update_valid_len(struct long_int_num *p_a)
     unsigned long *p_data = NULL;
     uint32_t i;
 
-    if (!p_a) {
+    if (!p_a || p_a->valid_word_len == 0) {
         return;
     }
 
@@ -318,7 +319,7 @@ struct long_int_num *montgomery_mod_exp(struct long_int_num *p_m, struct long_in
     struct long_int_num *p_mr = NULL;
     struct long_int_num *p_square = NULL;
     int i;
-    if ((exp & 1UL) == 0) {
+    if ((exp & 1UL) == 0 || exp < SMALLEST_EXP) { /* small exp reject */
         goto fail_final;
     }
 
