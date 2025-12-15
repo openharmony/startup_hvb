@@ -45,10 +45,8 @@ ohos_static_library("libhvb_static") {
     "src/rvt/hvb_rvt.c",
     "src/utils/hvb_util.c",
   ]
-  include_dirs = [
-    "incldue",
-    "//third_party/bounds_checking_function/include",
-  ]
+  external_deps = [ "bounds_checking_function:libsec_shared" ]
+  include_dirs = [ "incldue" ]
   public_configs = [ ":libhvb_exported_configs" ]
   part_name = "hvb"
   subsystem_name = "startup"
