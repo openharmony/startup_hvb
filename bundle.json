@@ -47,6 +47,7 @@
           "name": "//base/startup/hvb/libhvb:libhvb_static"
         }
       ],
+      12,
       "test": []
     }
   }
