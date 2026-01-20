@@ -60,8 +60,6 @@ ohos_static_library("libhvb_static_real") {
     "//base/update/updater/*",
     "//base/update/sys_installer/*",
     "//base/startup/init/interfaces/innerkits/fs_manager:libfsmanager_static_real",
-    "//vendor/huawei/base/update/updater_ext/*",
-    "//vendor/huawei/base/update/sys_installer_ext/*",
     "//out/*",
   ]
   sources = hvb_sources
