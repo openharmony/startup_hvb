@@ -28,24 +28,42 @@ config("libhvb_exported_configs") {
   }
 }
 
+hvb_sources = [
+  "src/auth/hvb.c",
+  "src/cert/hvb_cert.c",
+  "src/cmdline/hvb_cmdline.c",
+  "src/crypto/hvb_gm_log.c",
+  "src/crypto/hvb_hash_sha256.c",
+  "src/crypto/hvb_rsa_verify.c",
+  "src/crypto/hvb_rsa.c",
+  "src/crypto/hvb_sm2_bn.c",
+  "src/crypto/hvb_sm2.c",
+  "src/crypto/hvb_sm3.c",
+  "src/deps/hvb_sysdeps.c",
+  "src/footer/hvb_footer.c",
+  "src/rvt/hvb_rvt.c",
+  "src/utils/hvb_util.c",
+]
+ 
 ohos_static_library("libhvb_static") {
-  sources = [
-    "src/auth/hvb.c",
-    "src/cert/hvb_cert.c",
-    "src/cmdline/hvb_cmdline.c",
-    "src/crypto/hvb_gm_log.c",
-    "src/crypto/hvb_hash_sha256.c",
-    "src/crypto/hvb_rsa.c",
-    "src/crypto/hvb_rsa_verify.c",
-    "src/crypto/hvb_sm2.c",
-    "src/crypto/hvb_sm2_bn.c",
-    "src/crypto/hvb_sm3.c",
-    "src/deps/hvb_sysdeps.c",
-    "src/footer/hvb_footer.c",
-    "src/rvt/hvb_rvt.c",
-    "src/utils/hvb_util.c",
-  ]
+  sources = hvb_sources
   external_deps = [ "bounds_checking_function:libsec_shared" ]
+  include_dirs = [ "incldue" ]
+  public_configs = [ ":libhvb_exported_configs" ]
+  part_name = "hvb"
+  subsystem_name = "startup"
+}
+ 
+ohos_static_library("libhvb_static_real") {
+  visibility = [
+    ":*",
+    "//base/update/updater/*",
+    "//base/update/sys_installer/*",
+    "//base/startup/init/interfaces/innerkits/fs_manager:libfsmanager_static_real",
+    "//out/*",
+  ]
+  sources = hvb_sources
+  external_deps = [ "bounds_checking_function:libsec_static" ]
   include_dirs = [ "incldue" ]
   public_configs = [ ":libhvb_exported_configs" ]
   part_name = "hvb"

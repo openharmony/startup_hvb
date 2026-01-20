@@ -45,6 +45,27 @@
             ]
           },
           "name": "//base/startup/hvb/libhvb:libhvb_static"
+        },
+        {
+          "header": {
+            "header_base": "//base/startup/hvb/libhvb/include",
+            "header_files": [
+              "hvb.h",
+              "hvb_cert.h",
+              "hvb_cmdline.h",
+              "hvb_crypto.h",
+              "hvb_footer.h",
+              "hvb_ops.h",
+              "hvb_rvt.h",
+              "hvb_sm2.h",
+              "hvb_sysdeps.h",
+              "hvb_types.h",
+              "hvb_util.h",
+              "libhvb.h"
+            ]
+          },
+          "name": "//base/startup/hvb/libhvb:libhvb_static_real",
+          "visibility": ["updater"]
         }
       ],
       "test": []
