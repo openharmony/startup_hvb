@@ -470,26 +470,26 @@ static enum hvb_errno hvb_cert_pubk_parser_rsa(struct hvb_rsa_pubkey *pubk, stru
 
     if (!_decode_octets(&buf, sizeof(uint64_t), &p, end)) {
         hvb_print("error, dc bit_length.\n");
-        return 1;
+        return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     bit_length = hvb_buftouint64(buf.addr);
     bit_length = hvb_be64toh(bit_length);
 
     if (!_decode_octets(&buf, sizeof(uint64_t), &p, end)) {
         hvb_print("error, dc n0.\n");
-        return 1;
+        return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     n0 = hvb_buftouint64(buf.addr);
     n0 = hvb_be64toh(n0);
 
     if (!_decode_octets(&mod, bit_length / 8, &p, end)) {
         hvb_print("error, dc mod.\n");
-        return 1;
+        return HVB_ERROR_INVALID_CERT_FORMAT;
     }
 
     if (!_decode_octets(&p_rr, bit_length / 8, &p, end)) {
         hvb_print("error, dc p_rr\n");
-        return 1;
+        return HVB_ERROR_INVALID_CERT_FORMAT;
     }
 
     pubk->width = bit_length;
@@ -500,7 +500,7 @@ static enum hvb_errno hvb_cert_pubk_parser_rsa(struct hvb_rsa_pubkey *pubk, stru
     pubk->rlen = p_rr.size;
     pubk->n_n0_i = n0;
 
-    return 0;
+    return HVB_OK;
 }
 
 static enum hvb_errno hvb_cert_pubk_parser_sm(struct sm2_pubkey *pubk, struct hvb_buf *raw_pubk)
@@ -522,16 +522,17 @@ static enum hvb_errno hvb_cert_pubk_parser_sm(struct sm2_pubkey *pubk, struct hv
 static enum hvb_errno hvb_verify_cert_rsa(struct hvb_buf *tbs, struct hvb_sign_info *sign_info, uint32_t salt_size)
 {
     int ret = HVB_OK;
+    enum hvb_errno ret_hvb;
     uint32_t hash_len;
     struct hvb_buf temp_buf;
     uint8_t *hash = NULL;
     struct hvb_rsa_pubkey pubk;
 
     temp_buf = sign_info->pubk;
-    ret = hvb_cert_pubk_parser_rsa(&pubk, &temp_buf);
-    if (ret != HVB_OK) {
+    ret_hvb = hvb_cert_pubk_parser_rsa(&pubk, &temp_buf);
+    if (ret_hvb != HVB_OK) {
         hvb_print("error, hvb cert pubk parser.\n");
-        return ret;
+        return ret_hvb;
     }
     hash_len = get_hash_size(sign_info->algorithm);
     hash = hvb_malloc(hash_len);
@@ -562,6 +563,7 @@ static enum hvb_errno hvb_verify_cert_rsa(struct hvb_buf *tbs, struct hvb_sign_i
 static enum hvb_errno hvb_verify_cert_sm(struct hvb_buf *tbs, struct hvb_sign_info *sign_info)
 {
     int ret = HVB_OK;
+    enum hvb_errno ret_hvb;
     struct hvb_buf temp_buf = {0};
     struct hvb_buf user_id = {0};
     struct sm2_pubkey pubk = {0};
@@ -572,10 +574,10 @@ static enum hvb_errno hvb_verify_cert_sm(struct hvb_buf *tbs, struct hvb_sign_in
     }
 
     temp_buf = sign_info->pubk;
-    ret = hvb_cert_pubk_parser_sm(&pubk, &temp_buf);
-    if (ret != HVB_OK) {
+    ret_hvb = hvb_cert_pubk_parser_sm(&pubk, &temp_buf);
+    if (ret_hvb != HVB_OK) {
         hvb_print("error, hvb cert pubk parser.\n");
-        return ret;
+        return ret_hvb;
     }
 
     user_id = sign_info->user_id;
