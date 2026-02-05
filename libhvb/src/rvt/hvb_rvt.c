@@ -84,6 +84,8 @@ static enum hvb_errno hvb_calculate_certs_digest_sm(struct hvb_verified_data *vd
 
 enum hvb_errno hvb_calculate_certs_digest(struct hvb_verified_data *vd, uint8_t *out_digest)
 {
+    hvb_return_hvb_err_if_null(vd);
+
     switch (vd->algorithm) {
         case 0: // SHA256_RSA3072
         case 1: // SHA256_RSA4096
@@ -106,6 +108,11 @@ enum hvb_errno hvb_rvt_head_parser(const struct hvb_buf *rvt, struct rvt_image_h
 
     if (rvt->size < sizeof(*header)) {
         hvb_print("error, rvt->size is too small.\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (rvt->size > RVT_MAX_SIZE) {
+        hvb_print("error, rvt->size is too large.\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
 
@@ -134,18 +141,18 @@ enum hvb_errno hvb_rvt_get_pubk_desc(const struct hvb_buf *rvt, struct hvb_buf *
     hvb_return_hvb_err_if_null(rvt->addr);
     hvb_return_hvb_err_if_null(pubk_desc);
 
-    if (rvt->size < sizeof(*pubk_desc)) {
+    if (rvt->size < sizeof(struct rvt_image_header)) {
         hvb_print("error, rvt->size is too small.\n");
+        return HVB_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (rvt->size > RVT_MAX_SIZE) {
+        hvb_print("error, rvt->size is too large.\n");
         return HVB_ERROR_INVALID_ARGUMENT;
     }
 
     pubk_desc->addr = rvt->addr + sizeof(struct rvt_image_header);
     pubk_desc->size = rvt->size - sizeof(struct rvt_image_header);
-
-    if (pubk_desc->size > rvt->size) {
-        hvb_print("error, pubk_desc->size is invalid.\n");
-        return HVB_ERROR_INVALID_ARGUMENT;
-    }
 
     return HVB_OK;
 }
