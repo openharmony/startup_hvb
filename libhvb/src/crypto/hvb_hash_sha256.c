@@ -371,6 +371,10 @@ int hash_calc_do_final(struct hash_ctx_t *hash_ctx, const void *msg, uint32_t ms
     uint64_t total_bit_len;
     int ret;
 
+    if (hash_ctx == NULL) {
+        return HASH_ERR_PARAM_NULL;
+    }
+
     ret = hash_calc_update(hash_ctx, msg, msg_len);
     if (ret != HASH_OK) {
         return ret;
