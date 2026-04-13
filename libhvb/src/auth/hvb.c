@@ -407,11 +407,14 @@ void hvb_chain_verify_data_free(struct hvb_verified_data *vd)
     }
 
     for (n = 0; n < vd->num_loaded_certs && vd->certs; n++) {
-        if (vd->certs[n].data.addr != NULL)
+        if (vd->certs[n].data.addr != NULL) {
             hvb_free(vd->certs[n].data.addr);
+            vd->certs[n].data.addr = NULL;
+        }
 
         if (vd->certs[n].partition_name != NULL) {
             hvb_free(vd->certs[n].partition_name);
+            vd->certs[n].partition_name = NULL;
         }
     }
 
@@ -420,11 +423,15 @@ void hvb_chain_verify_data_free(struct hvb_verified_data *vd)
     }
 
     for (n = 0; n < vd->num_loaded_images && vd->images; n++) {
-        if (vd->images[n].data.addr != NULL)
+        if (vd->images[n].data.addr != NULL) {
             hvb_free(vd->images[n].data.addr);
+            vd->images[n].data.addr = NULL;
+        }
 
-        if (vd->images[n].partition_name != NULL)
+        if (vd->images[n].partition_name != NULL) {
             hvb_free(vd->images[n].partition_name);
+            vd->images[n].partition_name = NULL;
+        }
     }
 
     if (vd->images != NULL) {
