@@ -339,8 +339,9 @@ static int hvb_rsa_verify_pss_param_check(const struct hvb_rsa_pubkey *pkey, con
 
     if (signlen == klen) {
         ret = hvb_memcmp(psign, pkey->pn, signlen);
-        if (ret > 0)
+        if (ret > 0) {
             return SIGN_LEN_ERROR;
+        }
     }
 
     return VERIFY_OK;
