@@ -325,7 +325,7 @@ static enum hvb_errno _hvb_cert_signature_parser(struct hvb_cert *cert, uint8_t 
 static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8_t **p, uint8_t *end, uint8_t *header)
 {
     struct hvb_buf buf = {0};
-    struct hvb_sign_info *sign_info = &cert->signature_info;
+    struct hvb_sign_info *info = &cert->signature_info;
     size_t cp_size = hvb_offsetof(struct hvb_sign_info, pubk);
     uint8_t *cur_header;
 
@@ -338,48 +338,46 @@ static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8
         return HVB_ERROR_OOM;
     }
 
-    if (header + sign_info->pubkey_offset > end || (uintptr_t)header + sign_info->pubkey_offset <= (uintptr_t)header) {
+    if (header + info->pubkey_offset > end || (uintptr_t)header + info->pubkey_offset <= (uintptr_t)header) {
         hvb_print("error, illegal pubkey offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-    cur_header = header + sign_info->pubkey_offset;
+    cur_header = header + info->pubkey_offset;
 
-    if (cur_header + sign_info->pubkey_len > end || (uintptr_t)cur_header + sign_info->pubkey_len <= (uintptr_t)cur_header) {
+    if (cur_header + info->pubkey_len > end || (uintptr_t)cur_header + info->pubkey_len <= (uintptr_t)cur_header) {
         hvb_print("error, dc pubkey.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-    sign_info->pubk.addr = cur_header;
-    sign_info->pubk.size = sign_info->pubkey_len;
+    info->pubk.addr = cur_header;
+    info->pubk.size = info->pubkey_len;
 
-    if (header + sign_info->signature_offset > end || (uintptr_t)header + sign_info->signature_offset <= (uintptr_t)header) {
+    if (header + info->signature_offset > end || (uintptr_t)header + info->signature_offset <= (uintptr_t)header) {
         hvb_print("error, illegal signature offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-    cur_header = header + sign_info->signature_offset;
+    cur_header = header + info->signature_offset;
 
-    if (cur_header + sign_info->signature_len > end ||
-        (uintptr_t)cur_header + sign_info->signature_len <= (uintptr_t)cur_header) {
+    if (cur_header + info->signature_len > end || (uintptr_t)cur_header + info->signature_len <= (uintptr_t)cur_header) {
         hvb_print("error, dc sign.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
-    sign_info->sign.addr = cur_header;
-    sign_info->sign.size = sign_info->signature_len;
+    info->sign.addr = cur_header;
+    info->sign.size = info->signature_len;
 
     /* only SM hash algo need user_id */
-    if (sign_info->algorithm == SM_ALGO) {
-        if (header + sign_info->user_id_offset > end || (uintptr_t)header + sign_info->user_id_offset <= (uintptr_t)header) {
+    if (info->algorithm == SM_ALGO) {
+        if (header + info->user_id_offset > end || (uintptr_t)header + info->user_id_offset <= (uintptr_t)header) {
             hvb_print("error, illegal user_id offset.\n");
             return HVB_ERROR_INVALID_CERT_FORMAT;
         }
-        cur_header = header + sign_info->user_id_offset;
+        cur_header = header + info->user_id_offset;
 
-        if (cur_header + sign_info->user_id_len > end ||
-            (uintptr_t)cur_header + sign_info->user_id_len <= (uintptr_t)cur_header) {
+        if (cur_header + info->user_id_len > end || (uintptr_t)cur_header + info->user_id_len <= (uintptr_t)cur_header) {
             hvb_print("error, dc user id.\n");
             return HVB_ERROR_INVALID_CERT_FORMAT;
         }
-        sign_info->user_id.addr = cur_header;
-        sign_info->user_id.size = sign_info->user_id_len;
+        info->user_id.addr = cur_header;
+        info->user_id.size = info->user_id_len;
     }
 
     return HVB_OK;
