@@ -357,7 +357,8 @@ static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8
     }
     cur_header = header + info->signature_offset;
 
-    if (cur_header + info->signature_len > end || (uintptr_t)cur_header + info->signature_len <= (uintptr_t)cur_header) {
+    if (cur_header + info->signature_len > end ||
+        (uintptr_t)cur_header + info->signature_len <= (uintptr_t)cur_header) {
         hvb_print("error, dc sign.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
