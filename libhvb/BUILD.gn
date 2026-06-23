@@ -74,4 +74,5 @@ ohos_static_library("libhvb_static_real") {
   public_configs = [ ":libhvb_exported_configs" ]
   part_name = "hvb"
   subsystem_name = "startup"
+  branch_protector_ret = "pac_ret"
 }
