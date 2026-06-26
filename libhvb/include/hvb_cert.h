@@ -75,85 +75,85 @@ struct hvb_sign_info {
 } HVB_ATTR_PACKED;
 
 struct hvb_cert {
-    /* Three bytes equal to "HVB" (HVB_MAGIC). */
+    /* 0. Three bytes equal to "HVB" (HVB_MAGIC). */
     uint8_t magic[HVB_MAGIC_LEN];
 
-    /* The major version of libhvb. */
+    /* 4. The major version of libhvb. */
     uint32_t version_major;
 
-    /* The minor version of libhvb. */
+    /* 8. The minor version of libhvb. */
     uint32_t version_minor;
 
-    /* The release data for verity info data. */
+    /* 12. The release data for verity info data. */
     uint8_t verity_reserved[HVB_VERITY_RESERVED_SIZE];
 
-    /* The original length for image. */
+    /* 48. The original length for image. */
     uint64_t image_original_len;
 
-    /* The length for image after padding zeroes. */
+    /* 56. The length for image after padding zeroes. */
     uint64_t image_len;
 
-    /* The partition name. */
+    /* 64. The partition name. */
     uint8_t image_name[VERITY_NAME_SIZE];
 
-    /* The location of rollback value. */
+    /* 128. The location of rollback value. */
     uint64_t rollback_location;
 
-    /* The rollback index. */
+    /* 136. The rollback index. */
     uint64_t rollback_index;
 
     /*
-     * The type of image verity.
+     * 144. The type of image verity.
      * 1: hash image
      * 2: hashtree image
      */
     uint32_t verity_type;
 
     /*
-     * The algorithm for calculated image hash.
+     * 148. The algorithm for calculated image hash.
      * 0: ShA256
      * 1: SHA1
      * 2: SHA512
      */
     uint32_t hash_algo;
 
-    /* The offset for salt data, it stored in hash_payload. */
+    /* 152. The offset for salt data, it stored in hash_payload. */
     uint64_t salt_offset;
 
-    /* The size of salt data. */
+    /* 160. The size of salt data. */
     uint64_t salt_size;
 
-    /* The offset for digest, it stored in hash_payload. */
+    /* 168. The offset for digest, it stored in hash_payload. */
     uint64_t digest_offset;
 
-    /* The size of digest. */
+    /* 176. The size of digest. */
     uint64_t digest_size;
 
-    /* The offset for hashtree. */
+    /* 184. The offset for hashtree. */
     uint64_t hashtree_offset;
 
-    /* The size of hashtree. */
+    /* 192. The size of hashtree. */
     uint64_t hashtree_size;
 
-    /* The size of each block in hashtree mode (4 KB by default). */
+    /* 200. The size of each block in hashtree mode (4 KB by default). */
     uint64_t data_block_size;
 
-    /* The size of each block for storing hash in a hashtree (4 KB by default). */
+    /* 208. The size of each block for storing hash in a hashtree (4 KB by default). */
     uint64_t hash_block_size;
 
-    /* The device number FEC. */
+    /* 216. The device number FEC. */
     uint64_t fec_num_roots;
 
-    /* The offset of FEC. */
+    /* 224. The offset of FEC. */
     uint64_t fec_offset;
 
-    /* The size of FEC. */
+    /* 232. The size of FEC. */
     uint64_t fec_size;
 
-    /* save the salt and digest of image. */
+    /* 240. save the salt and digest of image. */
     struct hash_payload hash_payload;
 
-    /* signature info */
+    /* 240 + salt_size + digest_size. signature info */
     struct hvb_sign_info signature_info;
 } HVB_ATTR_PACKED;
 
