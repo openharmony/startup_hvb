@@ -229,6 +229,11 @@ static bool _decode_octets(struct hvb_buf *buf, size_t size, uint8_t **p, uint8_
     return true;
 }
 
+static bool IsInvalidParams(uint8_t *p, uint64_t size, uint8_t *end)
+{
+    return p + size > end || (uintptr_t)p + size <= (uintptr_t)p;
+}
+
 static enum hvb_errno _hvb_cert_payload_parser(struct hvb_cert *cert, uint8_t **p, uint8_t *end)
 {
     struct hvb_buf buf;
@@ -254,29 +259,25 @@ static enum hvb_errno _hvb_cert_payload_parser_v2(struct hvb_cert *cert, uint8_t
     struct hash_payload *payload = &cert->hash_payload;
     uint8_t *cur_header;
 
-    if (header + cert->salt_offset > end ||
-        (uintptr_t)header + cert->salt_offset <= (uintptr_t)header) {
+    if (IsInvalidParams(header, cert->salt_offset, end)) {
         hvb_print("error, illegal salt offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     cur_header = header + cert->salt_offset;
 
-    if (cur_header + cert->salt_size > end ||
-        (uintptr_t)cur_header + cert->salt_size <= (uintptr_t)cur_header) {
+    if (IsInvalidParams(cur_header, cert->salt_size, end)) {
         hvb_print("error, dc salt.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     payload->salt = cur_header;
 
-    if (header + cert->digest_offset > end ||
-        (uintptr_t)header + cert->digest_offset <= (uintptr_t)header) {
+    if (IsInvalidParams(header, cert->digest_offset, end)) {
         hvb_print("error, illegal digest offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     cur_header = header + cert->digest_offset;
 
-    if (cur_header + cert->digest_size > end ||
-        (uintptr_t)cur_header + cert->digest_size <= (uintptr_t)cur_header) {
+    if (IsInvalidParams(cur_header, cert->digest_size, end)) {
         hvb_print("error, dc digest.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
@@ -338,30 +339,26 @@ static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8
         return HVB_ERROR_OOM;
     }
 
-    if (header + sign_info->pubkey_offset > end ||
-        (uintptr_t)header + sign_info->pubkey_offset <= (uintptr_t)header) {
+    if (IsInvalidParams(header, sign_info->pubkey_offset, end)) {
         hvb_print("error, illegal pubkey offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     cur_header = header + sign_info->pubkey_offset;
 
-    if (cur_header + sign_info->pubkey_len > end ||
-        (uintptr_t)cur_header + sign_info->pubkey_len <= (uintptr_t)cur_header) {
+    if (IsInvalidParams(cur_header, sign_info->pubkey_len, end)) {
         hvb_print("error, dc pubkey.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     sign_info->pubk.addr = cur_header;
     sign_info->pubk.size = sign_info->pubkey_len;
 
-    if (header + sign_info->signature_offset > end ||
-        (uintptr_t)header + sign_info->signature_offset <= (uintptr_t)header) {
+    if (IsInvalidParams(header, sign_info->signature_offset, end)) {
         hvb_print("error, illegal signature offset.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
     cur_header = header + sign_info->signature_offset;
 
-    if (cur_header + sign_info->signature_len > end ||
-        (uintptr_t)cur_header + sign_info->signature_len <= (uintptr_t)cur_header) {
+    if (IsInvalidParams(cur_header, sign_info->signature_len, end)) {
         hvb_print("error, dc sign.\n");
         return HVB_ERROR_INVALID_CERT_FORMAT;
     }
@@ -370,15 +367,13 @@ static enum hvb_errno _hvb_cert_signature_parser_v2(struct hvb_cert *cert, uint8
 
     /* only SM hash algo need user_id */
     if (sign_info->algorithm == SM_ALGO) {
-        if (header + sign_info->user_id_offset > end ||
-            (uintptr_t)header + sign_info->user_id_offset <= (uintptr_t)header) {
+        if (IsInvalidParams(header, sign_info->user_id_offset, end)) {
             hvb_print("error, illegal user_id offset.\n");
             return HVB_ERROR_INVALID_CERT_FORMAT;
         }
         cur_header = header + sign_info->user_id_offset;
 
-        if (cur_header + sign_info->user_id_len > end ||
-            (uintptr_t)cur_header + sign_info->user_id_len <= (uintptr_t)cur_header) {
+        if (IsInvalidParams(cur_header, sign_info->user_id_len, end)) {
             hvb_print("error, dc user id.\n");
             return HVB_ERROR_INVALID_CERT_FORMAT;
         }
