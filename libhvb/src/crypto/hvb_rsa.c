@@ -62,7 +62,7 @@ static int lin_copy(struct long_int_num *p_src, struct long_int_num *p_dst)
     return RESULT_OK;
 }
 
-static int lin_compare(struct long_int_num *p_a, struct long_int_num *p_b)
+int lin_compare(struct long_int_num *p_a, struct long_int_num *p_b)
 {
     int i;
 

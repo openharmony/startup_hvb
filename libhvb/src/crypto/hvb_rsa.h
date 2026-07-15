@@ -27,6 +27,7 @@ struct long_int_num {
 struct long_int_num *lin_create(uint32_t word_len);
 void lin_free(struct long_int_num *p_long_int);
 void lin_update_valid_len(struct long_int_num *p_a);
+int lin_compare(struct long_int_num *p_a, struct long_int_num *p_b);
 uint32_t lin_get_bitlen(struct long_int_num *p_a);
 uint32_t bn_get_valid_len(const uint8_t *pd, uint32_t size);
 
