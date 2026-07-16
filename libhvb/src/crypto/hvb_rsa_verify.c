@@ -406,7 +406,6 @@ int hvb_rsa_verify_pss(const struct hvb_rsa_pubkey
     if (ret != VERIFY_OK) {
         goto rsa_error;
     }
-
     if (lin_compare(p_m, p_n) >= 0) {
         ret = SIGN_LEN_ERROR;
         goto rsa_error;  
