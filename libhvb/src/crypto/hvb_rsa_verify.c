@@ -408,7 +408,7 @@ int hvb_rsa_verify_pss(const struct hvb_rsa_pubkey
     }
     if (lin_compare(p_m, p_n) >= 0) {
         ret = SIGN_LEN_ERROR;
-        goto rsa_error;  
+        goto rsa_error;
     }
     /* Step 1: RSA prim decrypt */
     em = montgomery_mod_exp(p_m, p_n, n_n0_i, p_rr, pkey->e);
