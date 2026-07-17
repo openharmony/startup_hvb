@@ -62,21 +62,21 @@ static int lin_copy(struct long_int_num *p_src, struct long_int_num *p_dst)
     return RESULT_OK;
 }
 
-int lin_compare(struct long_int_num *p_a, struct long_int_num *p_b)
+int lin_compare(struct long_int_num *pa, struct long_int_num *pb)
 {
     int i;
 
-    if (p_a->valid_word_len != p_b->valid_word_len) {
-        return p_a->valid_word_len - p_b->valid_word_len;
+    if (pa->valid_word_len != pb->valid_word_len) {
+        return pa->valid_word_len - pb->valid_word_len;
     }
 
-    if (p_a->valid_word_len == 0) {
+    if (pa->valid_word_len == 0) {
         return 0;
     }
 
-    for (i = p_a->valid_word_len - 1; i >= 0; --i) {
-        if (p_a->p_uint[i] != p_b->p_uint[i]) {
-            if (p_a->p_uint[i] > p_b->p_uint[i])
+    for (i = pa->valid_word_len - 1; i >= 0; --i) {
+        if (pa->p_uint[i] != pb->p_uint[i]) {
+            if (pa->p_uint[i] > pb->p_uint[i])
                 return 1;
             return -1;
         }
