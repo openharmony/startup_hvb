@@ -317,7 +317,6 @@ static int hvb_rsa_verify_pss_param_check(const struct hvb_rsa_pubkey *pkey, con
 {
     uint32_t klen;
     uint32_t n_validlen;
-    int ret;
 
     if (!pkey || !pdigest || !psign) {
         return PARAM_EMPTY_ERROR;
