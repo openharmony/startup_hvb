@@ -62,24 +62,22 @@ static int lin_copy(struct long_int_num *p_src, struct long_int_num *p_dst)
     return RESULT_OK;
 }
 
-int LinCompare(struct long_int_num *pa, struct long_int_num *pb)
+static int lin_compare(struct long_int_num *p_a, struct long_int_num *p_b)
 {
     int i;
 
-    if (pa->valid_word_len != pb->valid_word_len) {
-        return pa->valid_word_len - pb->valid_word_len;
+    if (p_a->valid_word_len != p_b->valid_word_len) {
+        return p_a->valid_word_len - p_b->valid_word_len;
     }
 
-    if (pa->valid_word_len == 0) {
+    if (p_a->valid_word_len == 0) {
         return 0;
     }
 
-    for (i = pa->valid_word_len - 1; i >= 0; --i) {
-        if (pa->p_uint[i] != pb->p_uint[i]) {
-            if (pa->p_uint[i] > pb->p_uint[i]) {
+    for (i = p_a->valid_word_len - 1; i >= 0; --i) {
+        if (p_a->p_uint[i] != p_b->p_uint[i]) {
+            if (p_a->p_uint[i] > p_b->p_uint[i])
                 return 1;
-            }
-
             return -1;
         }
     }
@@ -361,7 +359,7 @@ struct long_int_num *montgomery_mod_exp(struct long_int_num *p_m, struct long_in
     montgomery_mod_mul(p_res, p_res, p_n, n_n0_i, p_square);
     montgomery_mod_mul(p_m, p_square, p_n, n_n0_i, p_res);
 
-    if (LinCompare(p_res, p_n) >= 0) {
+    if (lin_compare(p_res, p_n) >= 0) {
         lin_sub(p_res, p_n);
     }
 

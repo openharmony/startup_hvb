@@ -317,7 +317,6 @@ static int hvb_rsa_verify_pss_param_check(const struct hvb_rsa_pubkey *pkey, con
 {
     uint32_t klen;
     uint32_t n_validlen;
-    int ret;
 
     if (!pkey || !pdigest || !psign) {
         return PARAM_EMPTY_ERROR;
@@ -404,10 +403,6 @@ int hvb_rsa_verify_pss(const struct hvb_rsa_pubkey
     }
     ret = hvb_rsa_verify_pss_param_convert(pkey, psign, signlen, p_n, p_rr, p_m);
     if (ret != VERIFY_OK) {
-        goto rsa_error;
-    }
-    if (LinCompare(p_m, p_n) >= 0) {
-        ret = SIGN_LEN_ERROR;
         goto rsa_error;
     }
     /* Step 1: RSA prim decrypt */
